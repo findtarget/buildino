@@ -1,0 +1,108 @@
+/* src/app/globals.css */
+
+/* F: این خط حیاتی است و باید در ابتدا باشد */
+@import "tailwindcss";
+/*@import url("https://fonts.googleapis.com/css2?family=IRANYekan:wght@400;700&display=swap"); */
+
+/* فونت پایه با پشتیبانی از اعداد فارسی */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-FD-NL-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-FD-NL-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* تعریف متغیرهای پایه */
+:root {
+  --font-primary: 'Vazirmatn', sans-serif;
+}
+
+/* 🎨 Theme 1: Modern & Professional (Light/Blue) */
+:root[data-theme='light'] {
+  --bg-color: #f7f9fc;
+  --text-color: #111827;
+  --bg-secondary: #ffffff;
+  --border-color: #e5e7eb;
+  --accent-color: #4f46e5; /* Indigo */
+  --accent-color-light: #e0e7ff;
+  --text-secondary-color: #6b7280;
+}
+
+/* 🌙 Theme 2: Sleek & Focused (Dark) */
+:root[data-theme='dark'] {
+  --bg-color: #171717; /* Neutral Dark */
+  --text-color: #f5f5f5; /* Off-white */
+  --bg-secondary: #262626;
+  --border-color: #404040;
+  --accent-color: #06b6d4; /* Vibrant Cyan */
+  --accent-color-light: rgba(6, 182, 212, 0.1);
+  --text-secondary-color: #a3a3a3;
+}
+
+/* 🌿 Theme 3: Calm & Natural (Green) */
+:root[data-theme='green'] {
+  --bg-color: #f2f7f4; /* Natural, misty green */
+  --text-color: #064e3b; /* Dark Emerald */
+  --bg-secondary: #ffffff;
+  --border-color: #bbf7d0;
+  --accent-color: #10b981; /* Rich Emerald */
+  --accent-color-light: #d1fae5;
+  --text-secondary-color: #059669;
+}
+
+/* استایل‌های عمومی بدنه */
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  direction: rtl;
+  font-family: var(--font-primary), Tahoma,'IRANYekan', Arial, sans-serif;
+}
+
+/* افکت تغییر تم به صورت نرم */
+* {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* استایل‌های سفارشی برای تقویم */
+.responsive-calendar {
+  font-family: var(--font-primary) !important;
+  background-color: var(--bg-secondary) !important;
+  border-radius: 1rem !important; /* 16px */
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.responsive-calendar .Calendar__header,
+.responsive-calendar .Calendar__weekDays {
+  color: var(--text-color) !important;
+}
+.responsive-calendar .Calendar__day {
+  color: var(--text-color) !important;
+}
+.responsive-calendar .Calendar__day:not(.-disabled):not(.-blank):hover {
+  background: var(--accent-color-light) !important;
+  color: var(--accent-color) !important;
+  border-radius: 9999px;
+}
+.responsive-calendar .Calendar__day.-selected,
+.responsive-calendar .Calendar__day.-selectedStart,
+.responsive-calendar .Calendar__day.-selectedEnd {
+  color: #fff !important;
+  background: var(--accent-color) !important;
+  border-radius: 9999px;
+}
+.responsive-calendar .Calendar__day.today {
+  border: 1px solid var(--accent-color) !important;
+  border-radius: 9999px;
+  color: var(--accent-color) !important;
+}
+.responsive-calendar .Calendar__monthText,
+.responsive-calendar .Calendar__yearText {
+  font-weight: bold;
+}
