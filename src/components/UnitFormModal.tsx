@@ -17,7 +17,6 @@ type UnitFormData = Omit<Unit, 'id' | 'balance' | 'area' | 'floor' | 'parkingSpo
 
 interface UnitFormModalProps {
   isOpen: boolean; onClose: () => void; onSubmit: (data: Omit<Unit, 'id'>) => void; initialData?: Unit | null;
-  // F: [اصلاح اصلی] دریافت prop جدید برای تشخیص رندر در کلاینت
   isClient: boolean;
 }
 
@@ -29,15 +28,19 @@ const defaultFormState: UnitFormData = {
 
 export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, isClient }: UnitFormModalProps) {
   const [formData, setFormData] = useState<UnitFormData>(defaultFormState);
-  
+
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
         setFormData({
           ...initialData,
-          balance: String(initialData.balance), area: String(initialData.area), floor: String(initialData.floor),
-          parkingSpots: String(initialData.parkingSpots), residentCount: String(initialData.residentCount ?? 0),
-          ownerSince: stringToDay(initialData.ownerSince), residentSince: stringToDay(initialData.residentSince),
+          balance: String(initialData.balance ?? 0),
+          area: String(initialData.area ?? 0),
+          floor: String(initialData.floor ?? 0),
+          parkingSpots: String(initialData.parkingSpots ?? 0),
+          residentCount: String(initialData.residentCount ?? 0),
+          ownerSince: stringToDay(initialData.ownerSince),
+          residentSince: stringToDay(initialData.residentSince),
         });
       } else {
         setFormData(defaultFormState);
@@ -70,9 +73,13 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
     e.preventDefault();
     onSubmit({
       ...formData,
-      balance: parseFloat(formData.balance) || 0, area: parseFloat(formData.area) || 0, floor: parseInt(formData.floor) || 0,
-      parkingSpots: parseInt(formData.parkingSpots) || 0, residentCount: parseInt(formData.residentCount) || 0,
-      ownerSince: dayToString(formData.ownerSince), residentSince: dayToString(formData.residentSince),
+      balance: parseFloat(formData.balance) || 0,
+      area: parseFloat(formData.area) || 0,
+      floor: parseInt(formData.floor) || 0,
+      parkingSpots: parseInt(formData.parkingSpots) || 0,
+      residentCount: parseInt(formData.residentCount) || 0,
+      ownerSince: dayToString(formData.ownerSince) || '',
+      residentSince: dayToString(formData.residentSince) || '',
     });
     onClose();
   };
@@ -98,11 +105,11 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
             <form onSubmit={handleSubmit} className="space-y-4 text-right">
               <div className="border-b border-[var(--border-color)] pb-4">
                 <p className="font-semibold mb-2" style={{color: 'var(--text-secondary-color)'}}>مشخصات اصلی واحد</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <input required name="unitNumber" value={formData.unitNumber} onChange={handleChange} placeholder="شماره واحد" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
                   <input required type="number" name="floor" value={formData.floor} onChange={handleChange} placeholder="طبقه" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
                   <input required type="number" step="0.01" name="area" value={formData.area} onChange={handleChange} placeholder="متراژ" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
-                   <select name="type" value={formData.type} onChange={handleChange} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]">
+                  <select name="type" value={formData.type} onChange={handleChange} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]">
                     <option value="Residential">مسکونی</option>
                     <option value="Commercial">تجاری</option>
                   </select>
@@ -110,11 +117,11 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
               </div>
               <div className="border-b border-[var(--border-color)] pb-4">
                 <p className="font-semibold mb-2" style={{color: 'var(--text-secondary-color)'}}>امکانات</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                   <input type="number" name="parkingSpots" value={formData.parkingSpots} onChange={handleChange} placeholder="تعداد پارکینگ" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
-                  <div className="flex items-center gap-2 p-2 justify-center">
-                      <label htmlFor="hasStorage" className="cursor-pointer">انباری دارد</label>
-                      <input type="checkbox" id="hasStorage" name="hasStorage" checked={formData.hasStorage} onChange={handleChange} className="w-4 h-4 rounded accent-[var(--accent-color)]"/>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="hasStorage" name="hasStorage" checked={formData.hasStorage} onChange={handleChange} className="w-4 h-4 rounded accent-[var(--accent-color)]" />
+                    <label htmlFor="hasStorage" className="cursor-pointer">انباری دارد</label>
                   </div>
                 </div>
               </div>
@@ -123,20 +130,20 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <input required name="ownerName" value={formData.ownerName} onChange={handleChange} placeholder="نام و نام خانوادگی مالک" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
                   <input required name="ownerContact" value={formData.ownerContact} onChange={handleChange} placeholder="شماره تماس مالک" className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]" />
-                  {/* F: [اصلاح اصلی] تقویم فقط در کلاینت رندر می‌شود */}
                   {isClient && <CustomDatePicker value={formData.ownerSince} onChange={handleOwnerSinceChange} placeholder="تاریخ تملک" />}
                 </div>
               </div>
               <div>
                 <p className="font-semibold mb-2" style={{color: 'var(--text-secondary-color)'}}>اطلاعات سکونت</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  <select name="status" value={formData.status} onChange={handleChange} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] md:col-span-1 lg:col-span-1">
-                      <option value="Vacant">خالی</option><option value="OwnerOccupied">مالک ساکن</option><option value="TenantOccupied">مستاجر ساکن</option>
+                  <select name="status" value={formData.status} onChange={handleChange} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]">
+                    <option value="Vacant">خالی</option>
+                    <option value="OwnerOccupied">مالک ساکن</option>
+                    <option value="TenantOccupied">مستاجر ساکن</option>
                   </select>
-                  <input required name="residentName" value={formData.residentName} onChange={handleChange} placeholder="نام ساکن" disabled={formData.status !== 'TenantOccupied'} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] disabled:opacity-50 md:col-span-2 lg:col-span-1" />
+                  <input required name="residentName" value={formData.residentName} onChange={handleChange} placeholder="نام ساکن" disabled={formData.status !== 'TenantOccupied'} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] disabled:opacity-50" />
                   <input required name="residentContact" value={formData.residentContact} onChange={handleChange} placeholder="تماس ساکن" disabled={formData.status !== 'TenantOccupied'} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] disabled:opacity-50" />
                   <input type="number" name="residentCount" value={formData.residentCount} onChange={handleChange} placeholder="تعداد ساکنین" disabled={formData.status === 'Vacant'} className="p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] disabled:opacity-50" />
-                  {/* F: [اصلاح اصلی] تقویم فقط در کلاینت رندر می‌شود */}
                   {isClient && <CustomDatePicker value={formData.residentSince} onChange={handleResidentSinceChange} placeholder="تاریخ سکونت" disabled={formData.status === 'Vacant'} />}
                 </div>
               </div>

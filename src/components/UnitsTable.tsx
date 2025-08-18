@@ -1,12 +1,12 @@
 // src/components/UnitsTable.tsx
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { PencilSquareIcon, TrashIcon, ArrowsUpDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { Unit, UnitStatus } from '@/types/index.d';
 import { toPersianDigits } from '@/lib/utils';
+import UnitFormModal from './UnitFormModal'; // اضافه اگر نبود
 
 interface UnitsTableProps {
   units: Unit[];
@@ -17,13 +17,18 @@ interface UnitsTableProps {
 type SortKey = keyof Unit | '';
 type SortOrder = 'asc' | 'desc';
 
-// ... getStatusChip ...
-
 export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<UnitStatus | 'all'>('all');
+  const [isModalOpen, setIsModalOpen] = useState(false); // برای مدال
+  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null); // برای ویرایش
+  const [mounted, setMounted] = useState(false); // برای isClient
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -37,7 +42,6 @@ export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps)
   const filteredAndSortedUnits = useMemo(() => {
     let result = [...units];
 
-    // Filtering
     if (statusFilter !== 'all') {
       result = result.filter(unit => unit.status === statusFilter);
     }
@@ -50,15 +54,14 @@ export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps)
       );
     }
 
-    // Sorting
     if (sortKey) {
       result.sort((a, b) => {
         const valA = a[sortKey];
         const valB = b[sortKey];
-        
+
         if (valA === null || valA === undefined) return 1;
         if (valB === null || valB === undefined) return -1;
-        
+
         let comparison = 0;
         if (typeof valA === 'string' && typeof valB === 'string') {
           comparison = valA.localeCompare(valB, 'fa');
@@ -74,16 +77,25 @@ export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps)
   }, [units, sortKey, sortOrder, searchTerm, statusFilter]);
 
   const tableHeaders: { key: SortKey; label: string }[] = [
-      { key: 'unitNumber', label: 'واحد' },
-      { key: 'ownerName', label: 'مالک' },
-      { key: 'residentName', label: 'ساکن' },
-      { key: 'ownerSince', label: 'تاریخ تملک' },
-      { key: 'status', label: 'وضعیت' },
-      { key: 'balance', label: 'مانده (تومان)' },
+    { key: 'unitNumber', label: 'واحد' },
+    { key: 'ownerName', label: 'مالک' },
+    { key: 'residentName', label: 'ساکن' },
+    { key: 'ownerSince', label: 'تاریخ تملک' },
+    { key: 'status', label: 'وضعیت' },
+    { key: 'balance', label: 'مانده (تومان)' },
   ];
-  
-  const tableVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } };
-  const rowVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } };
+
+  // مثال برای باز کردن مدال (ویرایش یا اضافه)
+  const handleEdit = (unit: Unit) => {
+    setSelectedUnit(unit);
+    setIsModalOpen(true);
+    onEdit(unit); // اگر prop باشه
+  };
+
+  const handleSubmit = (data: Omit<Unit, 'id'>) => {
+    // هندل سابمیت (ویرایش یا اضافه)
+    setIsModalOpen(false);
+  };
 
   return (
     <>
@@ -111,7 +123,7 @@ export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps)
       </div>
 
       <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-color)' }}>
-        <motion.table /* ... */ >
+        <motion.table className="w-full text-[var(--text-color)]">
           <thead style={{ backgroundColor: 'var(--bg-color)' }}>
             <tr>
               {tableHeaders.map(({key, label}) => (
@@ -127,13 +139,29 @@ export default function UnitsTable({ units, onEdit, onDelete }: UnitsTableProps)
           </thead>
           <tbody>
             {filteredAndSortedUnits.map((unit) => (
-              <motion.tr key={unit.id} variants={rowVariants} /* ... */ >
-                {/* ... Render cells using toPersianDigits as before ... */}
+              <motion.tr key={unit.id} className="border-t border-[var(--border-color)] hover:bg-[var(--bg-secondary)] transition-colors">
+                <td className="p-4 text-center">{toPersianDigits(unit.unitNumber)}</td>
+                <td className="p-4">{unit.ownerName}</td>
+                <td className="p-4">{unit.residentName}</td>
+                <td className="p-4 text-center">{toPersianDigits(unit.ownerSince || '-')}</td>
+                <td className="p-4 text-center">{/* getStatusChip(unit.status) */}</td>
+                <td className="p-4 text-center">{toPersianDigits(unit.balance.toLocaleString())}</td>
+                <td className="p-4 flex justify-center gap-3">
+                  <button onClick={() => handleEdit(unit)}><PencilSquareIcon className="w-5 h-5 text-[var(--accent-color)] hover:scale-110 transition" /></button>
+                  <button onClick={() => onDelete(unit.id)}><TrashIcon className="w-5 h-5 text-red-500 hover:scale-110 transition" /></button>
+                </td>
               </motion.tr>
             ))}
           </tbody>
         </motion.table>
       </div>
+      <UnitFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSubmit}
+        initialData={selectedUnit}
+        isClient={mounted}
+      />
     </>
   );
 }

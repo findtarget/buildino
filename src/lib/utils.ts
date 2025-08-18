@@ -13,13 +13,11 @@ export const toPersianDigits = (n: string | number): string => {
   return String(n).replace(/\d/g, (d) => persianDigits[parseInt(d)]);
 };
 
-// F: [اصلاح] تابع کمکی برای تبدیل آبجکت Day به رشته "YYYY/MM/DD"
-export const dayToString = (day: Day | null): string | null => {
-  if (!day) return null;
+export const dayToString = (day: Day | null): string => {
+  if (!day) return '';
   return `${day.year}/${String(day.month).padStart(2, '0')}/${String(day.day).padStart(2, '0')}`;
 };
 
-// F: [اصلاح] تابع کمکی برای تبدیل رشته تاریخ "YYYY/MM/DD" به آبجکت Day
 export const stringToDay = (dateStr: string | null | undefined): Day | null => {
   if (!dateStr) return null;
   const parts = dateStr.split('/');
