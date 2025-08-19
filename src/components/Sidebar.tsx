@@ -2,7 +2,7 @@
 'use client';
 
 // F: آیکون‌های مورد نیاز از جمله BuildingOfficeIcon اینجا هستند
-import { HomeIcon, BuildingOfficeIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, BuildingOfficeIcon, ChartBarIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,6 +17,7 @@ interface SidebarProps {
 const menuItems = [
   { label: 'داشبورد', icon: HomeIcon, href: '/dashboard' },
   { label: 'مدیریت واحدها', icon: BuildingOfficeIcon, href: '/units' },
+  { label: 'حسابداری', icon: CalculatorIcon , href: '/accounting' },
   { label: 'گزارش‌ها', icon: ChartBarIcon, href: '/reports' },
 ];
 

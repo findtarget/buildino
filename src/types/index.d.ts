@@ -23,3 +23,25 @@ export interface Unit {
   ownerSince: string | null;
   residentSince: string | null;
 }
+
+// F: [جدید] تعریف انواع داده برای ماژول حسابداری
+
+export type TransactionType = 'Income' | 'Expense';
+
+export type TransactionCategory = 
+  // Expense Categories
+  'Maintenance' | 'Utilities' | 'StaffSalary' | 'Repairs' | 'Supplies' | 'Management' |
+  // Income Categories
+  'MonthlyCharge' | 'MiscellaneousIncome' | 'LateFee';
+
+export interface Transaction {
+  id: number;
+  date: string; // "YYYY/MM/DD"
+  title: string;
+  type: TransactionType;
+  category: TransactionCategory;
+  amount: number;
+  description?: string;
+  relatedUnitId?: number; // Optional: Links transaction to a specific unit
+  isCharge: boolean; // True if it's a charge (debit), false if it's a payment (credit) for a unit
+}
