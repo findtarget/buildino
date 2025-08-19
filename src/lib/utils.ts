@@ -1,28 +1,42 @@
 // src/lib/utils.ts
 
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { Day } from 'react-modern-calendar-datepicker';
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+import { format as formatJalali, parse as parseJalali } from 'date-fns-jalali';
+import { faIR } from 'date-fns-jalali/locale';
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
 export const toPersianDigits = (n: string | number): string => {
-  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-  return String(n).replace(/\d/g, (d) => persianDigits[parseInt(d)]);
+  if (n === null || n === undefined) return '';
+  const numStr = String(n);
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  return numStr.replace(/[0-9]/g, (w) => persianDigits[+w]);
 };
 
-export const dayToString = (day: Day | null): string => {
-  if (!day) return '';
-  return `${day.year}/${String(day.month).padStart(2, '0')}/${String(day.day).padStart(2, '0')}`;
+// F: [راه حل نهایی] تابع جدید برای فرمت کردن تاریخ شمسی
+// ورودی: آبجکت Date جاوااسکریپت
+// خروجی: رشته تاریخ شمسی مانند "۱۴۰۳/۰۵/۲۸"
+export const formatJalaliDate = (date: Date | null): string => {
+  if (!date) return '';
+  // 'yyyy/MM/dd' فرمت خروجی را مشخص میکند
+  return formatJalali(date, 'yyyy/MM/dd', { locale: faIR });
 };
 
-export const stringToDay = (dateStr: string | null | undefined): Day | null => {
+// F: [راه حل نهایی] تابع جدید برای تبدیل رشته تاریخ شمسی به آبجکت Date
+// ورودی: رشته تاریخ شمسی مانند "1403/05/28"
+// خروجی: آبجکت Date جاوااسکریپت
+export const parseJalaliDate = (dateStr: string | null): Date | null => {
   if (!dateStr) return null;
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return null;
-  const [year, month, day] = parts.map(Number);
-  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-  return { year, month, day };
+  try {
+    // 'yyyy/MM/dd' فرمت ورودی را مشخص میکند
+    const parsedDate = parseJalali(dateStr, 'yyyy/MM/dd', new Date());
+    // بررسی میکنیم که تاریخ معتبر باشد
+    if (isNaN(parsedDate.getTime())) return null;
+    return parsedDate;
+  } catch (error) {
+    return null;
+  }
 };

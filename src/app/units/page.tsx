@@ -5,19 +5,20 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import UnitsTable from '@/components/UnitsTable';
 import { Unit } from '@/types/index.d';
-import UnitFormModal from '@/components/UnitFormModal';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { PlusIcon } from '@heroicons/react/24/solid';
 import { mockUnits } from '@/lib/mockData';
+import dynamic from 'next/dynamic';
+
+// F: [بهینه‌سازی اساسی] مودال به صورت دینامیک و فقط در سمت کلاینت لود می‌شود.
+const UnitFormModal = dynamic(() => import('@/components/UnitFormModal'), { ssr: false });
 
 export default function UnitsPage() {
   const [units, setUnits] = useState<Unit[]>(mockUnits);
-
   const [isFormModalOpen, setFormModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
-
   const [isConfirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [unitToDelete, setUnitToDelete] = useState<number | null>(null);
+  const [unitToDeleteId, setUnitToDeleteId] = useState<number | null>(null);
 
   const handleOpenAddModal = () => {
     setEditingUnit(null);
@@ -29,40 +30,38 @@ export default function UnitsPage() {
     setFormModalOpen(true);
   };
 
+  const handleCloseFormModal = () => {
+    setFormModalOpen(false);
+    // F: ریست کردن داده‌ها پس از اتمام انیمیشن خروج، از گلیچ جلوگیری می‌کند.
+    // AnimatePresence در خود مودال این مدیریت را انجام می‌دهد، ولی تاخیر کوچک اینجا امن‌تر است.
+    setTimeout(() => setEditingUnit(null), 300);
+  };
+
   const handleFormSubmit = (data: Omit<Unit, 'id'>) => {
     if (editingUnit) {
       setUnits(units.map(u => u.id === editingUnit.id ? { ...editingUnit, ...data } : u));
     } else {
-      const newUnit: Unit = {
-        id: Date.now(),
-        ...data,
-      };
+      const newUnit: Unit = { id: Date.now(), ...data };
       setUnits([newUnit, ...units]);
     }
-    handleCloseModals();
+    handleCloseFormModal();
   };
 
   const handleOpenDeleteModal = (id: number) => {
-    setUnitToDelete(id);
+    setUnitToDeleteId(id);
     setConfirmModalOpen(true);
   };
+  
+  const handleCloseConfirmModal = () => {
+    setConfirmModalOpen(false);
+    setTimeout(() => setUnitToDeleteId(null), 300);
+  }
 
   const handleConfirmDelete = () => {
-    if (unitToDelete !== null) {
-      setUnits(units.filter(u => u.id !== unitToDelete));
-      setUnitToDelete(null);
-      handleCloseModals();
+    if (unitToDeleteId !== null) {
+      setUnits(units.filter(u => u.id !== unitToDeleteId));
+      handleCloseConfirmModal(); // F: پس از حذف، مودال تایید را می‌بندیم.
     }
-  };
-
-  const handleCloseModals = () => {
-    setFormModalOpen(false);
-    setConfirmModalOpen(false);
-    // با کمی تاخیر state ها را ریست میکنیم تا انیمیشن خروج تمام شود
-    setTimeout(() => {
-        setEditingUnit(null);
-        setUnitToDelete(null);
-    }, 300); // 300ms should be enough for the exit animation
   };
 
   return (
@@ -72,43 +71,32 @@ export default function UnitsPage() {
       transition={{ duration: 0.5 }}
       className="p-4 md:p-6 space-y-6"
     >
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="flex justify-between items-center"
-      >
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>مدیریت واحدها</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-[var(--text-color)]">مدیریت واحدها</h1>
         <button
           onClick={handleOpenAddModal}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold transition-transform duration-200 hover:scale-105"
-          style={{ backgroundColor: 'var(--accent-color)' }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold transition-transform duration-200 hover:scale-105 bg-[var(--accent-color)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--accent-color)]"
         >
           <PlusIcon className="w-5 h-5" />
-          <span>افزودن واحد جدید</span>
+          <span>افزودن واحد</span>
         </button>
-      </motion.div>
+      </div>
 
       <UnitsTable units={units} onEdit={handleOpenEditModal} onDelete={handleOpenDeleteModal} />
 
-      {/* 
-        F: [اصلاح اساسی]
-        مودال‌ها را از رندر شرطی خارج می‌کنیم. 
-        اکنون خود کامپوننت مودال با استفاده از prop `isOpen` و `AnimatePresence` 
-        نمایش و انیمیشن خروج را مدیریت می‌کند.
-        این کار از خطای unmount ناگهانی جلوگیری می‌کند.
-      */}
+      {/* F: خود مودال‌ها نمایش/عدم نمایش را با isOpen مدیریت می‌کنند */}
       <UnitFormModal
         isOpen={isFormModalOpen}
-        onClose={handleCloseModals}
+        onClose={handleCloseFormModal}
         onSubmit={handleFormSubmit}
         initialData={editingUnit}
       />
 
       <ConfirmDeleteModal
         isOpen={isConfirmModalOpen}
-        onClose={handleCloseModals}
+        onClose={handleCloseConfirmModal}
         onConfirm={handleConfirmDelete}
+        itemName={units.find(u => u.id === unitToDeleteId)?.unitNumber || ''}
       />
     </motion.div>
   );

@@ -11,14 +11,15 @@ export interface Unit {
   type: UnitType;
   ownerName: string;
   ownerContact: string;
+  ownerNationalId: string | null; // F: [جدید] کد ملی مالک
   status: UnitStatus;
   residentName: string;
   residentContact: string;
+  residentNationalId: string | null; // F: [جدید] کد ملی ساکن
+  residentCount: number; // F: [اصلاح] این فیلد از قبل بود و حفظ شده
   parkingSpots: number;
   hasStorage: boolean;
   balance: number;
   ownerSince: string | null;
   residentSince: string | null;
-  // F: فیلد جدید برای تعداد ساکنین اضافه شد
-  residentCount: number; 
 }

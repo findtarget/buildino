@@ -70,39 +70,126 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-/* استایل‌های سفارشی برای تقویم */
-.responsive-calendar {
-  font-family: var(--font-primary) !important;
+/* F: استایل‌های جدید برای تقویم شمسی */
+.DatePicker {
+  /* F: z-index بالا برای نمایش روی همه عناصر مودال */
+  z-index: 60 !important;
+}
+
+.DatePicker__calendarContainer {
+  /* F: هماهنگ‌سازی ظاهر تقویم با تم پروژه */
   background-color: var(--bg-secondary) !important;
-  border-radius: 1rem !important; /* 16px */
   border: 1px solid var(--border-color) !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  border-radius: 12px;
 }
-.responsive-calendar .Calendar__header,
-.responsive-calendar .Calendar__weekDays {
-  color: var(--text-color) !important;
-}
-.responsive-calendar .Calendar__day {
-  color: var(--text-color) !important;
-}
-.responsive-calendar .Calendar__day:not(.-disabled):not(.-blank):hover {
-  background: var(--accent-color-light) !important;
-  color: var(--accent-color) !important;
+
+.DatePicker__day:not(.-selected):not(.-blank):hover {
+  background: var(--border-color);
+  color: var(--text-color);
   border-radius: 9999px;
 }
-.responsive-calendar .Calendar__day.-selected,
-.responsive-calendar .Calendar__day.-selectedStart,
-.responsive-calendar .Calendar__day.-selectedEnd {
-  color: #fff !important;
-  background: var(--accent-color) !important;
-  border-radius: 9999px;
+
+.DatePicker__day {
+  color: var(--text-color) !important;
 }
-.responsive-calendar .Calendar__day.today {
+
+.DatePicker__day.-disabled {
+  color: var(--text-secondary-color) !important;
+  opacity: 0.5;
+}
+
+.DatePicker__day.today {
   border: 1px solid var(--accent-color) !important;
-  border-radius: 9999px;
-  color: var(--accent-color) !important;
-}
-.responsive-calendar .Calendar__monthText,
-.responsive-calendar .Calendar__yearText {
   font-weight: bold;
+  border-radius: 9999px;
+}
+
+.DatePicker__monthText, .DatePicker__yearText, .DatePicker__weekDay {
+  color: var(--text-secondary-color) !important;
+}
+
+.DatePicker__navArrow, .DatePicker__navArrow.-disabled:hover {
+  border-color: var(--accent-color) !important;
+}
+
+.DatePicker__navArrow:hover {
+  border-color: var(--text-color) !important;
+}
+
+/* F: [حل مشکل اسکرول] رفع مشکل اسکرول مودال و بهبود نمایش در موبایل */
+.responsive-calendar {
+  /* F: موقعیت تقویم را مطلق می‌کند تا از ایجاد اسکرول ناخواسته جلوگیری شود */
+  position: absolute !important;
+}
+
+/* F: در دستگاه‌های کوچک‌تر (موبایل)، تقویم ظاهر بهتری خواهد داشت */
+@media (max-width: 768px) {
+  .responsive-calendar {
+    width: 90vw !important;
+    max-width: 350px;
+    transform: translate(-50%, 0) !important;
+    left: 50% !important;
+  }
+}
+
+/* 
+  این کدها تضمین میکنند که تقویم همیشه در بالاترین لایه نمایش داده میشود
+  و از نظر ظاهری با تم برنامه هماهنگ است.
+*/
+.responsive-calendar {
+  z-index: 100 !important; /* مهم: بالاتر از z-50 مودال ما قرار میگیرد */
+  font-family: var(--font-sans) !important; /* استفاده از فونت اصلی برنامه */
+  direction: rtl;
+}
+
+/* استایل دهی به روز انتخاب شده و روز جاری */
+.responsive-calendar .Day.--selected, 
+.responsive-calendar .Day.--selected:hover {
+  background-color: var(--accent-color) !important;
+  color: #fff !important;
+  border-radius: 0.5rem;
+}
+
+.responsive-calendar .Day.h-today {
+  border: 1px solid var(--accent-color) !important;
+  color: var(--accent-color) !important;
+  border-radius: 0.5rem;
+}
+
+/* اطمینان از فارسی بودن اعداد و متون داخل تقویم */
+.responsive-calendar .Day__text,
+.responsive-calendar .Calendar__monthYear-text,
+.responsive-calendar .Calendar__weekDay {
+  font-family: var(--font-sans) !important;
+}
+
+
+/* src/styles/globals.css */
+
+/* F: [راه حل نهایی] استایل های سفارشی برای react-day-picker */
+:root {
+  /* تعریف متغیرها برای استفاده در کامپوننت */
+  --rdp-cell-size: 40px;
+  --rdp-accent-color: var(--accent-color); /* استفاده از رنگ اصلی تم شما */
+  --rdp-background-color: var(--accent-color-light);
+  --rdp-accent-color-dark: var(--accent-color);
+  --rdp-background-color-dark: var(--accent-color-light);
+  --rdp-outline: 2px solid var(--accent-color);
+  --rdp-outline-selected: 2px solid rgba(0, 0, 0, 0.75);
+  --rdp-border-radius: 0.5rem;
+}
+
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+  background-color: var(--rdp-accent-color) !important;
+  color: white !important;
+}
+
+.rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+    background-color: var(--bg-hover-color) !important;
+}
+
+/* فونت فارسی برای تقویم */
+.rdp {
+  font-family: var(--font-sans) !important;
 }
