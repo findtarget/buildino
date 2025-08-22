@@ -13,7 +13,8 @@ export function useOnClickOutside<T extends HTMLElement = HTMLElement>(
       const el = ref?.current;
       const target = event.target as HTMLElement;
 
-      if (target?.closest('.rdp')) {
+      // چک کردن اگر کلیک داخل تقویم شمسی است
+      if (target?.closest('.rdp') || target?.closest('.jalali-calendar')) {
         return;
       }
 
@@ -25,7 +26,7 @@ export function useOnClickOutside<T extends HTMLElement = HTMLElement>(
     };
 
     document.addEventListener('mousedown', listener);
-    document.addEventListener('touchstart', listener);
+    document.removeEventListener('touchstart', listener);
 
     return () => {
       document.removeEventListener('mousedown', listener);
