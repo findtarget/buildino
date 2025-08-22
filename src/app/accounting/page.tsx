@@ -9,7 +9,6 @@ import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MonthlyChargeModal from '@/components/MonthlyChargeModal';
 import { Transaction } from '@/types/index.d';
 import { DocumentDuplicateIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
-import { parseJalaliDate } from '@/lib/utils';
 
 const mockUnits = [
   { id: 1, unitNumber: '101' }, { id: 2, unitNumber: '102' }, { id: 3, unitNumber: '103' },
@@ -88,6 +87,11 @@ export default function AccountingPage() {
     setIsChargeModalOpen(true);
   };
 
+  const handleChargeSubmit = (chargeTransactions: Transaction[]) => {
+  setTransactions(prev => [...chargeTransactions, ...prev]);
+  setIsChargeModalOpen(false);
+};
+
   const handleChargeGenerated = (chargeTransactions: Transaction[]) => {
     setTransactions([...chargeTransactions, ...transactions]);
     setIsChargeModalOpen(false);
@@ -158,6 +162,8 @@ export default function AccountingPage() {
         onClose={() => setIsChargeModalOpen(false)}
         onSubmit={handleChargeGenerated}
         unitsList={mockUnits}
+          existingTransactions={transactions}
+
       />
     </motion.div>
   );

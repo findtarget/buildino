@@ -2,13 +2,13 @@
 export interface UnitChargeInfo {
   id: number;
   unitNumber: string;
-  area: number; // مساحت به متر مربع
-  ownerType: 'owner' | 'tenant'; // مالک یا مستاجر
+  area: number;
+  ownerType: 'owner' | 'tenant';
   hasParking: boolean;
   parkingCount: number;
-  isCommercial: boolean; // تجاری یا مسکونی
-  floorCoefficient: number; // ضریب طبقه
-  balconyArea: number; // مساحت بالکن
+  isCommercial: boolean;
+  floorCoefficient: number;
+  balconyArea: number;
 }
 
 export interface ChargeCategory {
@@ -18,6 +18,7 @@ export interface ChargeCategory {
   calculationType: 'fixed' | 'perArea' | 'perUnit';
   includeParking: boolean;
   commercialMultiplier: number;
+  description: string;
 }
 
 export interface ChargeCalculation {
@@ -32,4 +33,12 @@ export interface ChargeCalculation {
   };
   totalAmount: number;
   breakdown: string[];
+}
+
+export interface MonthlyChargeRecord {
+  id: string;
+  month: string; // 1404/06
+  unitId: number;
+  amount: number;
+  createdAt: string;
 }

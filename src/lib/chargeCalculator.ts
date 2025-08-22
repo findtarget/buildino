@@ -6,66 +6,56 @@ export const defaultChargeCategories: ChargeCategory[] = [
   {
     id: 'maintenance',
     title: 'نگهداری و تعمیرات',
-    baseAmount: 50000,
+    baseAmount: 15000, // 15 هزار تومان به ازای هر متر
     calculationType: 'perArea',
     includeParking: false,
-    commercialMultiplier: 1.5
+    commercialMultiplier: 1.5,
+    description: 'هزینه تعمیر و نگهداری مشاعات، آسانسور و تأسیسات'
   },
   {
     id: 'cleaning',
     title: 'نظافت مشاعات',
-    baseAmount: 30000,
+    baseAmount: 8000, // 8 هزار تومان به ازای هر متر
     calculationType: 'perArea',
     includeParking: false,
-    commercialMultiplier: 1.3
+    commercialMultiplier: 1.3,
+    description: 'هزینه نظافت راه‌پله، لابی و محوطه مشترک'
   },
   {
     id: 'security',
     title: 'نگهبانی و حراست',
-    baseAmount: 200000,
+    baseAmount: 400000, // 400 هزار تومان ثابت
     calculationType: 'fixed',
     includeParking: true,
-    commercialMultiplier: 2.0
+    commercialMultiplier: 2.0,
+    description: 'هزینه نگهبان، سیستم امنیتی و کنترل دسترسی'
   },
   {
     id: 'utilities',
     title: 'برق و گاز مشاعات',
-    baseAmount: 40000,
+    baseAmount: 12000, // 12 هزار تومان به ازای هر متر
     calculationType: 'perArea',
     includeParking: false,
-    commercialMultiplier: 1.8
+    commercialMultiplier: 1.8,
+    description: 'هزینه برق راه‌پله، آسانسور و گرمایش مشترک'
   },
   {
     id: 'management',
     title: 'مدیریت و اداری',
-    baseAmount: 150000,
+    baseAmount: 250000, // 250 هزار تومان ثابت
     calculationType: 'fixed',
     includeParking: true,
-    commercialMultiplier: 1.2
+    commercialMultiplier: 1.2,
+    description: 'هزینه مدیریت ساختمان و امور اداری'
   },
   {
     id: 'parking',
     title: 'نگهداری پارکینگ',
-    baseAmount: 80000,
+    baseAmount: 120000, // 120 هزار تومان به ازای هر پارکینگ
     calculationType: 'perUnit',
     includeParking: true,
-    commercialMultiplier: 1.0
-  },
-  {
-    id: 'elevator',
-    title: 'نگهداری آسانسور',
-    baseAmount: 60000,
-    calculationType: 'perArea',
-    includeParking: false,
-    commercialMultiplier: 1.4
-  },
-  {
-    id: 'insurance',
-    title: 'بیمه ساختمان',
-    baseAmount: 25000,
-    calculationType: 'perArea',
-    includeParking: true,
-    commercialMultiplier: 2.5
+    commercialMultiplier: 1.0,
+    description: 'هزینه نگهداری، نظافت و نور پارکینگ'
   }
 ];
 
@@ -95,35 +85,41 @@ export function calculateUnitCharge(
         break;
         
       case 'perArea':
-        const effectiveArea = unit.area + (category.includeParking ? unit.balconyArea : 0);
+        const effectiveArea = unit.area + (category.includeParking && unit.hasParking ? unit.balconyArea : 0);
         amount = category.baseAmount * effectiveArea * unit.floorCoefficient;
         calculationDesc = `${toPersianDigits(category.baseAmount.toLocaleString())} × ${toPersianDigits(effectiveArea)} متر × ضریب ${toPersianDigits(unit.floorCoefficient)}`;
         break;
         
       case 'perUnit':
-        if (category.includeParking && unit.hasParking) {
-          amount = category.baseAmount * Math.max(1, unit.parkingCount);
+        if (category.includeParking && unit.hasParking && unit.parkingCount > 0) {
+          amount = category.baseAmount * unit.parkingCount;
           calculationDesc = `${toPersianDigits(category.baseAmount.toLocaleString())} × ${toPersianDigits(unit.parkingCount)} پارکینگ`;
         } else if (!category.includeParking) {
           amount = category.baseAmount;
           calculationDesc = `مبلغ واحد: ${toPersianDigits(category.baseAmount.toLocaleString())} تومان`;
+        } else {
+          amount = 0;
+          calculationDesc = 'بدون پارکینگ';
         }
         break;
     }
 
     // اعمال ضریب تجاری
-    if (unit.isCommercial) {
+    if (unit.isCommercial && amount > 0) {
       amount *= category.commercialMultiplier;
       calculationDesc += ` × ضریب تجاری ${toPersianDigits(category.commercialMultiplier)}`;
     }
 
+    const finalAmount = Math.round(amount);
     calculation.categories[category.id] = {
-      amount: Math.round(amount),
+      amount: finalAmount,
       calculation: calculationDesc
     };
 
-    calculation.totalAmount += Math.round(amount);
-    calculation.breakdown.push(`${category.title}: ${toPersianDigits(Math.round(amount).toLocaleString())} تومان`);
+    calculation.totalAmount += finalAmount;
+    if (finalAmount > 0) {
+      calculation.breakdown.push(`${category.title}: ${toPersianDigits(finalAmount.toLocaleString())} تومان`);
+    }
   });
 
   return calculation;
