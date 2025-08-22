@@ -9,6 +9,7 @@ import { toPersianDigits, formatJalaliDate } from '@/lib/utils';
 import { defaultChargeCategories, calculateBulkCharges } from '@/lib/chargeCalculator';
 import { format as formatJalali } from 'date-fns-jalali';
 import dynamic from 'next/dynamic';
+import { useChargeSettings } from '@/app/context/ChargeSettingsContext';
 
 const CustomDatePicker = dynamic(() => import('@/components/CustomDatePicker'), { ssr: false });
 
@@ -69,6 +70,9 @@ export default function MonthlyChargeModal({
   unitsList = mockUnitsData,
   existingTransactions = []
 }: MonthlyChargeModalProps) {
+  const { getCurrentYearSettings } = useChargeSettings();
+  const currentSettings = getCurrentYearSettings();
+  
   const [formData, setFormData] = useState<MonthlyChargeFormData>({
     chargeDate: new Date(),
     selectedUnits: [],
@@ -78,6 +82,14 @@ export default function MonthlyChargeModal({
   const [calculations, setCalculations] = useState<ChargeCalculation[]>([]);
   const [activeTab, setActiveTab] = useState<'selection' | 'preview' | 'summary'>('selection');
   const [chargeConflicts, setChargeConflicts] = useState<number[]>([]);
+
+  // دسته‌های فعال بر اساس تنظیمات
+  const activeCategories = defaultChargeCategories
+    .filter(cat => currentSettings.categories[cat.id]?.isActive !== false)
+    .map(cat => ({
+      ...cat,
+      baseAmount: currentSettings.categories[cat.id]?.baseAmount ?? cat.baseAmount
+    }));
 
   // بررسی تداخل شارژ برای ماه جاری
   useEffect(() => {
@@ -96,14 +108,19 @@ export default function MonthlyChargeModal({
     }
   }, [formData.chargeDate, formData.selectedUnits, existingTransactions]);
 
-  // محاسبه شارژها
+  // محاسبه شارژها با استفاده از تنظیمات
   useEffect(() => {
     if (formData.selectedUnits.length > 0 && formData.selectedCategories.length > 0) {
       const validUnits = formData.selectedUnits.filter(unitId => !chargeConflicts.includes(unitId));
       if (validUnits.length > 0) {
+        // استفاده از دسته‌های بروزرسانی شده
+        const selectedActiveCategories = activeCategories.filter(cat => 
+          formData.selectedCategories.includes(cat.id)
+        );
+        
         const newCalculations = calculateBulkCharges(
           unitsList,
-          defaultChargeCategories,
+          selectedActiveCategories,
           formData.selectedCategories,
           validUnits
         );
@@ -114,22 +131,27 @@ export default function MonthlyChargeModal({
     } else {
       setCalculations([]);
     }
-  }, [formData.selectedUnits, formData.selectedCategories, unitsList, chargeConflicts]);
+  }, [formData.selectedUnits, formData.selectedCategories, unitsList, chargeConflicts, activeCategories]);
 
   // بازنشانی فرم هنگام باز شدن مودال
   useEffect(() => {
     if (isOpen) {
+      // انتخاب پیش‌فرض دسته‌های فعال
+      const defaultSelectedCategories = activeCategories
+        .filter(cat => currentSettings.categories[cat.id]?.isActive !== false)
+        .map(cat => cat.id);
+        
       setFormData({
         chargeDate: new Date(),
         selectedUnits: [],
-        selectedCategories: ['maintenance', 'cleaning', 'security', 'utilities', 'management'],
+        selectedCategories: defaultSelectedCategories,
         description: '',
       });
       setActiveTab('selection');
       setCalculations([]);
       setChargeConflicts([]);
     }
-  }, [isOpen]);
+  }, [isOpen, activeCategories, currentSettings]);
 
   const handleUnitSelection = (unitId: number) => {
     setFormData(prev => ({
@@ -273,43 +295,86 @@ export default function MonthlyChargeModal({
                       </div>
                     </div>
 
+                    {/* نمایش تنظیمات فعلی */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                        📋 تنظیمات فعلی شارژ (سال {toPersianDigits(currentSettings.year)})
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                        <div className="text-blue-600 dark:text-blue-400">
+                          دسته‌های فعال: {toPersianDigits(activeCategories.length.toString())}
+                        </div>
+                        <div className="text-blue-600 dark:text-blue-400">
+                          ضریب تجاری: {toPersianDigits(currentSettings.coefficients?.commercial?.toString() || '1.5')}×
+                        </div>
+                        <div className="text-blue-600 dark:text-blue-400">
+                          مجموع پایه: {toPersianDigits(Math.round(activeCategories.reduce((sum, cat) => sum + cat.baseAmount, 0) / 1000).toString())}K ت
+                        </div>
+                      </div>
+                    </div>
+
                     {/* انتخاب دسته‌بندی هزینه‌ها */}
                     <div className="bg-[var(--bg-color)] p-4 rounded-xl">
                       <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
-                        انتخاب دسته‌بندی هزینه‌ها ({toPersianDigits(formData.selectedCategories.length)} از {toPersianDigits(defaultChargeCategories.length)})
+                        انتخاب دسته‌بندی هزینه‌ها ({toPersianDigits(formData.selectedCategories.length)} از {toPersianDigits(activeCategories.length)})
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {defaultChargeCategories.map((category) => (
-                          <label
-                            key={category.id}
-                            className="flex items-start gap-3 p-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer border border-[var(--border-color)]"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.selectedCategories.includes(category.id)}
-                              onChange={() => handleCategorySelection(category.id)}
-                              className="mt-1 w-4 h-4 text-blue-500"
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium text-[var(--text-color)]">{category.title}</div>
-                              <div className="text-xs text-gray-500 mb-1">
-                                {category.description}
+                        {activeCategories.map((category) => {
+                          const isFromSettings = currentSettings.categories[category.id];
+                          return (
+                            <label
+                              key={category.id}
+                              className="flex items-start gap-3 p-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer border border-[var(--border-color)]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.selectedCategories.includes(category.id)}
+                                onChange={() => handleCategorySelection(category.id)}
+                                className="mt-1 w-4 h-4 text-blue-500"
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium text-[var(--text-color)] flex items-center gap-2">
+                                  {category.title}
+                                  {isFromSettings && (
+                                    <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full">
+                                      از تنظیمات
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 mb-1">
+                                  {category.description}
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                  {category.calculationType === 'fixed' ? 'مبلغ ثابت' : 
+                                   category.calculationType === 'perArea' ? 'بر اساس متراژ' : 'بر واحد پارکینگ'}
+                                  {category.includeParking && ' • شامل پارکینگ'}
+                                  {category.commercialMultiplier > 1 && ` • ضریب تجاری ×${toPersianDigits(category.commercialMultiplier)}`}
+                                </div>
+                                <div className="text-xs font-medium flex items-center gap-2">
+                                  <span className="text-blue-600">
+                                    پایه: {toPersianDigits(category.baseAmount.toLocaleString())} تومان
+                                    {category.calculationType === 'perArea' && ' / متر'}
+                                    {category.calculationType === 'perUnit' && category.includeParking && ' / پارکینگ'}
+                                  </span>
+                                  {isFromSettings && category.baseAmount !== defaultChargeCategories.find(c => c.id === category.id)?.baseAmount && (
+                                    <span className="text-orange-600 text-xs">
+                                      (تغییر یافته)
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-600">
-                                {category.calculationType === 'fixed' ? 'مبلغ ثابت' : 
-                                 category.calculationType === 'perArea' ? 'بر اساس متراژ' : 'بر واحد پارکینگ'}
-                                {category.includeParking && ' • شامل پارکینگ'}
-                                {category.commercialMultiplier > 1 && ` • ضریب تجاری ×${toPersianDigits(category.commercialMultiplier)}`}
-                              </div>
-                              <div className="text-xs text-blue-600 font-medium">
-                                پایه: {toPersianDigits(category.baseAmount.toLocaleString())} تومان
-                                {category.calculationType === 'perArea' && ' / متر'}
-                                {category.calculationType === 'perUnit' && category.includeParking && ' / پارکینگ'}
-                              </div>
-                            </div>
-                          </label>
-                        ))}
+                            </label>
+                          );
+                        })}
                       </div>
+                      
+                      {activeCategories.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          <div className="text-2xl mb-2">⚠️</div>
+                          <div className="text-sm">هیچ دسته‌ای در تنظیمات فعال نیست!</div>
+                          <div className="text-xs mt-1">لطفاً ابتدا از منوی تنظیمات، دسته‌های مورد نظر را فعال کنید.</div>
+                        </div>
+                      )}
                     </div>
 
                     {/* انتخاب واحدها */}
@@ -403,10 +468,15 @@ export default function MonthlyChargeModal({
                               متراژ: {toPersianDigits(calc.area)} م² • 
                               ضریب طبقه: {toPersianDigits(unit.floorCoefficient)} • 
                               {unit.hasParking ? `پارکینگ: ${toPersianDigits(unit.parkingCount)}` : 'بدون پارکینگ'}
+                              {unit.isCommercial && (
+                                <span className="text-orange-600">
+                                  {' • ضریب تجاری: ×'}{toPersianDigits(currentSettings.coefficients?.commercial?.toString() || '1.5')}
+                                </span>
+                              )}
                             </div>
                             <div className="space-y-2 mb-3">
                               {Object.entries(calc.categories).map(([catId, catCalc]) => {
-                                const category = defaultChargeCategories.find(c => c.id === catId)!;
+                                const category = activeCategories.find(c => c.id === catId)!;
                                 return (
                                   <div key={catId} className="text-xs border-b border-gray-200 pb-1">
                                     <div className="font-medium text-[var(--text-color)]">{category.title}</div>

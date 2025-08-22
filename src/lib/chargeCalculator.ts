@@ -1,136 +1,158 @@
 // src/lib/chargeCalculator.ts
-import { UnitChargeInfo, ChargeCategory, ChargeCalculation } from '@/types/charge';
-import { toPersianDigits } from '@/lib/utils';
+import { UnitChargeInfo, ChargeCategory, ChargeCalculation, CategoryCalculation } from '@/types/charge';
 
 export const defaultChargeCategories: ChargeCategory[] = [
   {
     id: 'maintenance',
-    title: 'نگهداری و تعمیرات',
-    baseAmount: 15000, // 15 هزار تومان به ازای هر متر
+    title: 'تعمیرات و نگهداری',
+    description: 'هزینه‌های تعمیر و نگهداری ساختمان',
+    baseAmount: 120000,
     calculationType: 'perArea',
     includeParking: false,
     commercialMultiplier: 1.5,
-    description: 'هزینه تعمیر و نگهداری مشاعات، آسانسور و تأسیسات'
+    isActive: true,
   },
   {
     id: 'cleaning',
-    title: 'نظافت مشاعات',
-    baseAmount: 8000, // 8 هزار تومان به ازای هر متر
+    title: 'نظافت و بهداشت',
+    description: 'هزینه‌های نظافت مشاعات',
+    baseAmount: 80000,
     calculationType: 'perArea',
     includeParking: false,
     commercialMultiplier: 1.3,
-    description: 'هزینه نظافت راه‌پله، لابی و محوطه مشترک'
+    isActive: true,
   },
   {
     id: 'security',
-    title: 'نگهبانی و حراست',
-    baseAmount: 400000, // 400 هزار تومان ثابت
+    title: 'حراست و نگهبانی',
+    description: 'حقوق نگهبان و هزینه‌های امنیتی',
+    baseAmount: 250000,
     calculationType: 'fixed',
-    includeParking: true,
-    commercialMultiplier: 2.0,
-    description: 'هزینه نگهبان، سیستم امنیتی و کنترل دسترسی'
+    includeParking: false,
+    commercialMultiplier: 1.2,
+    isActive: true,
   },
   {
     id: 'utilities',
-    title: 'برق و گاز مشاعات',
-    baseAmount: 12000, // 12 هزار تومان به ازای هر متر
+    title: 'مشاعات و قبوض',
+    description: 'آب، برق، گاز و تلفن مشاعات',
+    baseAmount: 90000,
     calculationType: 'perArea',
     includeParking: false,
-    commercialMultiplier: 1.8,
-    description: 'هزینه برق راه‌پله، آسانسور و گرمایش مشترک'
+    commercialMultiplier: 1.4,
+    isActive: true,
   },
   {
     id: 'management',
-    title: 'مدیریت و اداری',
-    baseAmount: 250000, // 250 هزار تومان ثابت
+    title: 'مدیریت ساختمان',
+    description: 'هزینه‌های اداری و مدیریت',
+    baseAmount: 180000,
     calculationType: 'fixed',
-    includeParking: true,
-    commercialMultiplier: 1.2,
-    description: 'هزینه مدیریت ساختمان و امور اداری'
+    includeParking: false,
+    commercialMultiplier: 1.1,
+    isActive: true,
   },
   {
     id: 'parking',
     title: 'نگهداری پارکینگ',
-    baseAmount: 120000, // 120 هزار تومان به ازای هر پارکینگ
+    description: 'تعمیر و نگهداری پارکینگ',
+    baseAmount: 50000,
     calculationType: 'perUnit',
     includeParking: true,
     commercialMultiplier: 1.0,
-    description: 'هزینه نگهداری، نظافت و نور پارکینگ'
-  }
+    isActive: true,
+  },
 ];
 
 export function calculateUnitCharge(
   unit: UnitChargeInfo,
   categories: ChargeCategory[],
-  selectedCategoryIds: string[]
+  selectedCategoryIds: string[],
+  coefficients: { commercial: number; floor: number; parking: number } = {
+    commercial: 1.5,
+    floor: 1.0,
+    parking: 1.0
+  }
 ): ChargeCalculation {
-  const selectedCategories = categories.filter(cat => selectedCategoryIds.includes(cat.id));
-  const calculation: ChargeCalculation = {
-    unitId: unit.id,
-    unitNumber: unit.unitNumber,
-    area: unit.area,
-    categories: {},
-    totalAmount: 0,
-    breakdown: []
-  };
+  const categoryCalculations: Record<string, CategoryCalculation> = {};
+  const breakdown: string[] = [];
+  let totalAmount = 0;
 
-  selectedCategories.forEach(category => {
+  const activeCategories = categories.filter(cat => 
+    selectedCategoryIds.includes(cat.id) && cat.isActive
+  );
+
+  for (const category of activeCategories) {
     let amount = 0;
-    let calculationDesc = '';
+    let calculation = '';
 
     switch (category.calculationType) {
       case 'fixed':
         amount = category.baseAmount;
-        calculationDesc = `مبلغ ثابت: ${toPersianDigits(category.baseAmount.toLocaleString())} تومان`;
+        calculation = `${category.baseAmount.toLocaleString()} تومان ثابت`;
         break;
-        
+
       case 'perArea':
-        const effectiveArea = unit.area + (category.includeParking && unit.hasParking ? unit.balconyArea : 0);
-        amount = category.baseAmount * effectiveArea * unit.floorCoefficient;
-        calculationDesc = `${toPersianDigits(category.baseAmount.toLocaleString())} × ${toPersianDigits(effectiveArea)} متر × ضریب ${toPersianDigits(unit.floorCoefficient)}`;
+        const effectiveArea = unit.area + (unit.balconyArea || 0);
+        amount = category.baseAmount * effectiveArea;
+        calculation = `${category.baseAmount.toLocaleString()} × ${effectiveArea} متر = ${amount.toLocaleString()}`;
         break;
-        
+
       case 'perUnit':
-        if (category.includeParking && unit.hasParking && unit.parkingCount > 0) {
+        if (category.includeParking && unit.hasParking) {
           amount = category.baseAmount * unit.parkingCount;
-          calculationDesc = `${toPersianDigits(category.baseAmount.toLocaleString())} × ${toPersianDigits(unit.parkingCount)} پارکینگ`;
+          calculation = `${category.baseAmount.toLocaleString()} × ${unit.parkingCount} پارکینگ = ${amount.toLocaleString()}`;
         } else if (!category.includeParking) {
           amount = category.baseAmount;
-          calculationDesc = `مبلغ واحد: ${toPersianDigits(category.baseAmount.toLocaleString())} تومان`;
-        } else {
-          amount = 0;
-          calculationDesc = 'بدون پارکینگ';
+          calculation = `${category.baseAmount.toLocaleString()} تومان ثابت`;
         }
         break;
     }
 
-    // اعمال ضریب تجاری
-    if (unit.isCommercial && amount > 0) {
-      amount *= category.commercialMultiplier;
-      calculationDesc += ` × ضریب تجاری ${toPersianDigits(category.commercialMultiplier)}`;
+    // اعمال ضریب طبقه
+    if (unit.floorCoefficient !== 1.0) {
+      amount *= unit.floorCoefficient;
+      calculation += ` × ضریب طبقه ${unit.floorCoefficient}`;
     }
 
-    const finalAmount = Math.round(amount);
-    calculation.categories[category.id] = {
-      amount: finalAmount,
-      calculation: calculationDesc
+    // اعمال ضریب تجاری
+    if (unit.isCommercial && category.commercialMultiplier > 1) {
+      amount *= category.commercialMultiplier;
+      calculation += ` × ضریب تجاری ${category.commercialMultiplier}`;
+    }
+
+    amount = Math.round(amount);
+
+    categoryCalculations[category.id] = {
+      categoryId: category.id,
+      amount,
+      calculation,
     };
 
-    calculation.totalAmount += finalAmount;
-    if (finalAmount > 0) {
-      calculation.breakdown.push(`${category.title}: ${toPersianDigits(finalAmount.toLocaleString())} تومان`);
-    }
-  });
+    breakdown.push(`${category.title}: ${amount.toLocaleString()} تومان`);
+    totalAmount += amount;
+  }
 
-  return calculation;
+  return {
+    unitId: unit.id,
+    unitNumber: unit.unitNumber,
+    area: unit.area,
+    totalAmount: Math.round(totalAmount),
+    categories: categoryCalculations,
+    breakdown,
+  };
 }
 
 export function calculateBulkCharges(
   units: UnitChargeInfo[],
   categories: ChargeCategory[],
   selectedCategoryIds: string[],
-  selectedUnitIds: number[]
+  selectedUnitIds: number[],
+  coefficients?: { commercial: number; floor: number; parking: number }
 ): ChargeCalculation[] {
   const selectedUnits = units.filter(unit => selectedUnitIds.includes(unit.id));
-  return selectedUnits.map(unit => calculateUnitCharge(unit, categories, selectedCategoryIds));
+  
+  return selectedUnits.map(unit => 
+    calculateUnitCharge(unit, categories, selectedCategoryIds, coefficients)
+  );
 }
