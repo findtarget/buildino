@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Transaction } from '@/types/index.d';
-import { toPersianDigits, formatJalaliDate, parseJalaliDate } from '@/lib/utils';
+import { toPersianDigits, formatJalaliDate, parseJalaliDate, toEnglishDigits, formatCurrency } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
 const CustomDatePicker = dynamic(() => import('@/components/CustomDatePicker'), { ssr: false });
@@ -50,7 +50,7 @@ export default function TransactionFormModal({
       if (initialData) {
         setFormData({
           ...initialData,
-          amount: String(initialData.amount),
+          amount: formatCurrency(initialData.amount).replace(' تومان', ''),
           relatedUnitId: initialData.relatedUnitId ?? undefined,
           date: initialData.date ? parseJalaliDate(initialData.date) : null,
         });
@@ -71,6 +71,25 @@ export default function TransactionFormModal({
     }
   };
 
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // حذف همه چیز غیر از اعداد فارسی و انگلیسی
+    const cleanValue = value.replace(/[^\d۰-۹]/g, '');
+    const englishValue = toEnglishDigits(cleanValue);
+    
+    if (englishValue) {
+      const numericValue = parseInt(englishValue);
+      const formattedValue = new Intl.NumberFormat('fa-IR').format(numericValue);
+      setFormData(prev => ({ ...prev, amount: toPersianDigits(formattedValue) }));
+    } else {
+      setFormData(prev => ({ ...prev, amount: '' }));
+    }
+
+    if (errors.amount) {
+      setErrors(prev => ({ ...prev, amount: '' }));
+    }
+  };
+
   const handleDateChange = (date: Date | null) => {
     setFormData(prev => ({ ...prev, date }));
     if (errors.date) {
@@ -81,7 +100,12 @@ export default function TransactionFormModal({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = 'عنوان تراکنش نمی‌تواند خالی باشد.';
-    if (!formData.amount || parseFloat(formData.amount) <= 0) newErrors.amount = 'مبلغ باید یک عدد مثبت باشد.';
+    
+    const numericAmount = parseFloat(toEnglishDigits(formData.amount.replace(/,/g, '')));
+    if (!formData.amount || isNaN(numericAmount) || numericAmount <= 0) {
+      newErrors.amount = 'مبلغ باید یک عدد مثبت باشد.';
+    }
+    
     if (!formData.date) newErrors.date = 'انتخاب تاریخ الزامی است.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -93,10 +117,11 @@ export default function TransactionFormModal({
 
     // تبدیل تاریخ به فرمت شمسی قبل از ارسال
     const jalaliDate = formatJalaliDate(formData.date!);
+    const numericAmount = parseFloat(toEnglishDigits(formData.amount.replace(/,/g, '')));
 
     onSubmit({
       ...formData,
-      amount: parseFloat(formData.amount) || 0,
+      amount: numericAmount,
       relatedUnitId: formData.relatedUnitId ? parseInt(String(formData.relatedUnitId)) : undefined,
       date: jalaliDate, // ارسال تاریخ به فرمت شمسی
     });
@@ -160,12 +185,12 @@ export default function TransactionFormModal({
                       مبلغ (تومان)
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       name="amount"
                       value={formData.amount}
-                      onChange={handleChange}
+                      onChange={handleAmountChange}
                       className="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] transition-all duration-200"
-                      placeholder="0"
+                      placeholder="۰"
                     />
                     {errors.amount && <p className="text-red-400 text-xs mt-1">{errors.amount}</p>}
                   </div>
