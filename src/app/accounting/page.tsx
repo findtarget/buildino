@@ -5,12 +5,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import AccountingTable from '@/components/AccountingTable';
 import TransactionFormModal from '@/components/TransactionFormModal';
-import ConfirmDeleteModal from '@/components/ConfirmDeleteModal'; // F: [اصلاح] ایمپورت مودال تایید حذف
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import MonthlyChargeModal from '@/components/MonthlyChargeModal';
 import { Transaction } from '@/types/index.d';
-import { DocumentDuplicateIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline'; // F: [اصلاح] استفاده از آیکون‌های outline برای هماهنگی
+import { DocumentDuplicateIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 import { parseJalaliDate } from '@/lib/utils';
 
-// F: این داده‌ها باید از یک منبع معتبر (API یا mockData.ts) بیایند
 const mockUnits = [
   { id: 1, unitNumber: '101' }, { id: 2, unitNumber: '102' }, { id: 3, unitNumber: '103' },
   { id: 4, unitNumber: '201' }, { id: 5, unitNumber: 'G1' },
@@ -30,10 +30,13 @@ export default function AccountingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'Income' | 'Expense'>('Expense');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-
-  // F: [اصلاح] Stateهای لازم برای مدیریت مودال تایید حذف
+  
+  // State های مودال تایید حذف
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
+  
+  // State های مودال صدور شارژ ماهانه
+  const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
 
   const handleOpenModalForCreate = (type: 'Income' | 'Expense') => {
     setEditingTransaction(null);
@@ -49,7 +52,7 @@ export default function AccountingPage() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingTransaction(null); // Clear editing state on close
+    setEditingTransaction(null);
   };
 
   const handleFormSubmit = (data: Omit<Transaction, 'id'>) => {
@@ -68,34 +71,40 @@ export default function AccountingPage() {
     handleCloseModal();
   };
 
-  // F: [اصلاح] این تابع مودال تایید حذف را باز می‌کند
   const handleDeleteRequest = (id: number) => {
     setDeletingTransactionId(id);
     setIsDeleteModalOpen(true);
   };
 
-  // F: [اصلاح] این تابع پس از تایید، تراکنش را حذف می‌کند
   const handleConfirmDelete = () => {
     if (deletingTransactionId) {
       setTransactions(transactions.filter(t => t.id !== deletingTransactionId));
     }
-    // بستن مودال و ریست کردن state
     setDeletingTransactionId(null);
     setIsDeleteModalOpen(false);
   };
 
   const handleGenerateCharges = () => {
-    alert("منطق صدور شارژ ماهانه هنوز پیاده‌سازی نشده است.");
+    setIsChargeModalOpen(true);
+  };
+
+  const handleChargeGenerated = (chargeTransactions: Transaction[]) => {
+    setTransactions([...chargeTransactions, ...transactions]);
+    setIsChargeModalOpen(false);
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+      initial={{ opacity: 0, y: 20 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      transition={{ duration: 0.5 }}
       className="p-4 md:p-6 space-y-6"
     >
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>دفتر کل حسابداری</h1>
-        {/* F: [اصلاح] بازگرداندن دکمه‌های اصلی با استایل و آیکون صحیح */}
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>
+          دفتر کل حسابداری
+        </h1>
+        
         <div className="flex gap-3">
           <button
             onClick={handleGenerateCharges}
@@ -124,7 +133,7 @@ export default function AccountingPage() {
       <AccountingTable
         transactions={transactions}
         onEdit={handleOpenModalForEdit}
-        onDelete={handleDeleteRequest} // F: [اصلاح] اتصال به تابع صحیح برای درخواست حذف
+        onDelete={handleDeleteRequest}
       />
 
       <TransactionFormModal
@@ -136,13 +145,19 @@ export default function AccountingPage() {
         unitsList={mockUnits}
       />
 
-      {/* F: [اصلاح] افزودن و پیکربندی مودال تایید حذف */}
       <ConfirmDeleteModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
         title="تایید حذف تراکنش"
         message="آیا از حذف این تراکنش برای همیشه اطمینان دارید؟ این عمل غیرقابل بازگشت است."
+      />
+
+      <MonthlyChargeModal
+        isOpen={isChargeModalOpen}
+        onClose={() => setIsChargeModalOpen(false)}
+        onSubmit={handleChargeGenerated}
+        unitsList={mockUnits}
       />
     </motion.div>
   );
