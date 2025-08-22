@@ -1,0 +1,66 @@
+/* src/components/jalali-fix.css */
+.jalali-calendar {
+  direction: rtl;
+  font-family: inherit;
+  text-align: right;
+}
+
+.jalali-calendar * {
+  font-family: inherit;
+}
+
+.jalali-calendar .grid {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.jalali-calendar .grid-cols-7 {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.jalali-calendar .h-9 {
+  height: 2.25rem;
+}
+
+.jalali-calendar .rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.jalali-calendar .text-sm {
+  font-size: 0.875rem;
+}
+
+.jalali-calendar .text-xs {
+  font-size: 0.75rem;
+}
+
+.jalali-calendar .font-bold {
+  font-weight: 700;
+}
+
+.jalali-calendar .font-medium {
+  font-weight: 500;
+}
+
+.jalali-calendar .transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.jalali-calendar .duration-200 {
+  transition-duration: 200ms;
+}
+
+.jalali-calendar .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.jalali-calendar .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* برای اعداد فارسی */
+.jalali-calendar [class*="text-"] {
+  font-family: inherit;
+}
