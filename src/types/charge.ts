@@ -39,31 +39,16 @@ export interface ChargeCalculation {
 
 export interface MonthlyChargeRecord {
   id: string;
-  year: number;
-  month: number;
-  unitId: number;
+  date: Date;
+  units: number[];
+  categories: string[];
   totalAmount: number;
-  categories: CategoryCalculation[];
-  createdAt: string;
+  description?: string;
 }
 
-// تنظیمات شارژ
-export interface ChargeSettings {
-  year: number;
-  categories: Record<string, {
-    baseAmount: number;
-    isActive: boolean;
-    lastUpdated: string;
-  }>;
-  coefficients: {
-    commercial: number;
-    floor: number;
-    parking: number;
-  };
-  lastUpdated: string;
-}
-
-export interface AppSettings {
-  chargeSettings: Record<number, ChargeSettings>; // کلید: سال
-  currentYear: number;
+export interface MonthlyChargeFormData {
+  chargeDate: Date | null;
+  selectedUnits: number[];
+  selectedCategories: string[];
+  description: string;
 }

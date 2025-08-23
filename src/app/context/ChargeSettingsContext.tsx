@@ -2,119 +2,72 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ChargeSettings, AppSettings } from '@/types/charge';
-import { defaultChargeCategories } from '@/lib/chargeCalculator';
+import { ChargeCategory } from '@/types/charge';
+
+interface ChargeSettings {
+  year: number;
+  categories: Record<string, { baseAmount?: number; isActive?: boolean }>;
+  coefficients: {
+    commercial: number;
+    floor: number;
+    parking: number;
+  };
+}
 
 interface ChargeSettingsContextType {
-  chargeSettings: AppSettings;
-  updateChargeSettings: (year: number, settings: Partial<ChargeSettings>) => void;
   getCurrentYearSettings: () => ChargeSettings;
-  resetToDefaults: (year: number) => void;
-  setCurrentYear: (year: number) => void;
+  updateSettings: (settings: Partial<ChargeSettings>) => void;
+  resetToDefaults: () => void;
 }
 
 const ChargeSettingsContext = createContext<ChargeSettingsContextType | undefined>(undefined);
 
-// تنظیمات پیش‌فرض برای سال 1404
-const getDefaultSettingsForYear = (year: number): ChargeSettings => ({
-  year,
-  categories: defaultChargeCategories.reduce((acc, cat) => ({
-    ...acc,
-    [cat.id]: {
-      baseAmount: cat.baseAmount,
-      isActive: cat.isActive,
-      lastUpdated: new Date().toISOString(),
-    }
-  }), {}),
+const defaultSettings: ChargeSettings = {
+  year: 1404,
+  categories: {},
   coefficients: {
     commercial: 1.5,
     floor: 1.0,
     parking: 1.0,
-  },
-  lastUpdated: new Date().toISOString(),
-});
-
-const defaultAppSettings: AppSettings = {
-  chargeSettings: {
-    1404: getDefaultSettingsForYear(1404),
-  },
-  currentYear: 1404,
+  }
 };
 
 export function ChargeSettingsProvider({ children }: { children: ReactNode }) {
-  const [chargeSettings, setChargeSettings] = useState<AppSettings>(defaultAppSettings);
+  const [settings, setSettings] = useState<ChargeSettings>(defaultSettings);
 
-  // بارگذاری از localStorage هنگام mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('buildino-charge-settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setChargeSettings(parsed);
+    const stored = localStorage.getItem('chargeSettings');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setSettings({ ...defaultSettings, ...parsed });
+      } catch (error) {
+        console.error('Error loading charge settings:', error);
       }
-    } catch (error) {
-      console.error('Error loading charge settings:', error);
     }
   }, []);
 
-  // ذخیره در localStorage هنگام تغییر
-  useEffect(() => {
-    try {
-      localStorage.setItem('buildino-charge-settings', JSON.stringify(chargeSettings));
-    } catch (error) {
-      console.error('Error saving charge settings:', error);
-    }
-  }, [chargeSettings]);
-
-  const updateChargeSettings = (year: number, newSettings: Partial<ChargeSettings>) => {
-    setChargeSettings(prev => ({
-      ...prev,
-      chargeSettings: {
-        ...prev.chargeSettings,
-        [year]: {
-          ...prev.chargeSettings[year] || getDefaultSettingsForYear(year),
-          ...newSettings,
-          lastUpdated: new Date().toISOString(),
-        }
-      }
-    }));
-  };
-
   const getCurrentYearSettings = (): ChargeSettings => {
-    return chargeSettings.chargeSettings[chargeSettings.currentYear] || getDefaultSettingsForYear(chargeSettings.currentYear);
+    return settings;
   };
 
-  const resetToDefaults = (year: number) => {
-    setChargeSettings(prev => ({
-      ...prev,
-      chargeSettings: {
-        ...prev.chargeSettings,
-        [year]: getDefaultSettingsForYear(year),
-      }
-    }));
+  const updateSettings = (newSettings: Partial<ChargeSettings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    localStorage.setItem('chargeSettings', JSON.stringify(updated));
   };
 
-  const setCurrentYear = (year: number) => {
-    setChargeSettings(prev => ({
-      ...prev,
-      currentYear: year,
-      chargeSettings: {
-        ...prev.chargeSettings,
-        [year]: prev.chargeSettings[year] || getDefaultSettingsForYear(year),
-      }
-    }));
+  const resetToDefaults = () => {
+    setSettings(defaultSettings);
+    localStorage.setItem('chargeSettings', JSON.stringify(defaultSettings));
   };
 
   return (
-    <ChargeSettingsContext.Provider
-      value={{
-        chargeSettings,
-        updateChargeSettings,
-        getCurrentYearSettings,
-        resetToDefaults,
-        setCurrentYear,
-      }}
-    >
+    <ChargeSettingsContext.Provider value={{
+      getCurrentYearSettings,
+      updateSettings,
+      resetToDefaults
+    }}>
       {children}
     </ChargeSettingsContext.Provider>
   );
