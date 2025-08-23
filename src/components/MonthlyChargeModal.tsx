@@ -1,7 +1,7 @@
 // src/components/MonthlyChargeModal.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Transaction } from '@/types/index.d';
 import { UnitChargeInfo, ChargeCategory, ChargeCalculation, MonthlyChargeRecord } from '@/types/charge';
@@ -28,56 +28,114 @@ interface MonthlyChargeModalProps {
   existingTransactions: Transaction[];
 }
 
+// نمونه واحدهای واقعی 20 واحدی
+const mockUnitsData: UnitChargeInfo[] = [
+  // طبقه همکف (تجاری)
+  { id: 1, unitNumber: '001', area: 120, ownerType: 'owner', hasParking: true, parkingCount: 2, isCommercial: true, floorCoefficient: 0.9, balconyArea: 0 },
+  { id: 2, unitNumber: '002', area: 80, ownerType: 'tenant', hasParking: true, parkingCount: 1, isCommercial: true, floorCoefficient: 0.9, balconyArea: 0 },
+  // طبقه اول
+  { id: 3, unitNumber: '101', area: 95, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.0, balconyArea: 8 },
+  { id: 4, unitNumber: '102', area: 110, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.0, balconyArea: 12 },
+  { id: 5, unitNumber: '103', area: 85, ownerType: 'tenant', hasParking: false, parkingCount: 0, isCommercial: false, floorCoefficient: 1.0, balconyArea: 6 },
+  { id: 6, unitNumber: '104', area: 105, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.0, balconyArea: 10 },
+  // طبقه دوم
+  { id: 7, unitNumber: '201', area: 95, ownerType: 'tenant', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.1, balconyArea: 8 },
+  { id: 8, unitNumber: '202', area: 110, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.1, balconyArea: 12 },
+  { id: 9, unitNumber: '203', area: 85, ownerType: 'owner', hasParking: false, parkingCount: 0, isCommercial: false, floorCoefficient: 1.1, balconyArea: 6 },
+  { id: 10, unitNumber: '204', area: 105, ownerType: 'tenant', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.1, balconyArea: 10 },
+  // طبقه سوم
+  { id: 11, unitNumber: '301', area: 95, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.2, balconyArea: 8 },
+  { id: 12, unitNumber: '302', area: 110, ownerType: 'owner', hasParking: true, parkingCount: 2, isCommercial: false, floorCoefficient: 1.2, balconyArea: 12 },
+  { id: 13, unitNumber: '303', area: 85, ownerType: 'tenant', hasParking: false, parkingCount: 0, isCommercial: false, floorCoefficient: 1.2, balconyArea: 6 },
+  { id: 14, unitNumber: '304', area: 105, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.2, balconyArea: 10 },
+  // طبقه چهارم
+  { id: 15, unitNumber: '401', area: 95, ownerType: 'tenant', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.3, balconyArea: 8 },
+  { id: 16, unitNumber: '402', area: 110, ownerType: 'owner', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.3, balconyArea: 12 },
+  { id: 17, unitNumber: '403', area: 85, ownerType: 'owner', hasParking: false, parkingCount: 0, isCommercial: false, floorCoefficient: 1.3, balconyArea: 6 },
+  { id: 18, unitNumber: '404', area: 105, ownerType: 'tenant', hasParking: true, parkingCount: 1, isCommercial: false, floorCoefficient: 1.3, balconyArea: 10 },
+  // طبقه پنجم (پنت‌هاوس)
+  { id: 19, unitNumber: '501', area: 150, ownerType: 'owner', hasParking: true, parkingCount: 2, isCommercial: false, floorCoefficient: 1.4, balconyArea: 25 },
+  { id: 20, unitNumber: '502', area: 130, ownerType: 'owner', hasParking: true, parkingCount: 2, isCommercial: false, floorCoefficient: 1.4, balconyArea: 20 },
+];
+
 export default function MonthlyChargeModal({
   isOpen,
   onClose,
   onSubmit,
-  unitsList = [],
+  unitsList = mockUnitsData,
   existingTransactions = []
 }: MonthlyChargeModalProps) {
   const { getCurrentYearSettings } = useChargeSettings();
-  const currentSettings = getCurrentYearSettings();
-
+  
   const [formData, setFormData] = useState<MonthlyChargeFormData>({
     chargeDate: new Date(),
     selectedUnits: [],
-    selectedCategories: ['maintenance', 'cleaning', 'security', 'utilities', 'management'],
+    selectedCategories: [],
     description: '',
   });
   const [calculations, setCalculations] = useState<ChargeCalculation[]>([]);
   const [activeTab, setActiveTab] = useState<'selection' | 'preview' | 'summary'>('selection');
   const [chargeConflicts, setChargeConflicts] = useState<number[]>([]);
 
-  // تبدیل units به UnitChargeInfo اگه ساختار متفاوت باشه
-  const normalizedUnits: UnitChargeInfo[] = unitsList.map(unit => {
-    // اگه قبلاً UnitChargeInfo هست، همونطور برگردون
-    if ('area' in unit && 'ownerType' in unit) {
-      return unit as UnitChargeInfo;
-    }
+  // 🔧 Fix 1: useMemo برای activeCategories
+  const { currentSettings, activeCategories } = useMemo(() => {
+    const settings = getCurrentYearSettings();
+    const categories = defaultChargeCategories
+      .filter(cat => settings.categories[cat.id]?.isActive !== false)
+      .map(cat => ({
+        ...cat,
+        baseAmount: settings.categories[cat.id]?.baseAmount ?? cat.baseAmount
+      }));
     
-    // اگه Unit معمولی هست، تبدیل کن
-    return {
-      id: unit.id,
-      unitNumber: unit.unitNumber || 'نامشخص',
-      area: unit.area || 100, // مقدار پیش‌فرض
-      ownerType: unit.status === 'OwnerOccupied' ? 'owner' : 'tenant',
-      hasParking: unit.hasParking || false,
-      parkingCount: unit.parkingCount || 0,
-      isCommercial: unit.isCommercial || false,
-      floorCoefficient: unit.floorCoefficient || 1.0,
-      balconyArea: unit.balconyArea || 0,
-    } as UnitChargeInfo;
-  });
+    return { currentSettings: settings, activeCategories: categories };
+  }, [getCurrentYearSettings]);
 
-  // دسته‌های فعال بر اساس تنظیمات
-  const activeCategories = defaultChargeCategories
-    .filter(cat => currentSettings.categories[cat.id]?.isActive !== false)
-    .map(cat => ({
-      ...cat,
-      baseAmount: currentSettings.categories[cat.id]?.baseAmount ?? cat.baseAmount
+  // 🔧 Fix 2: useCallback برای handleUnitSelection
+  const handleUnitSelection = useCallback((unitId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedUnits: prev.selectedUnits.includes(unitId)
+        ? prev.selectedUnits.filter(id => id !== unitId)
+        : [...prev.selectedUnits, unitId]
     }));
+  }, []);
 
-  // بررسی تداخل شارژ برای ماه جاری
+  // 🔧 Fix 3: useCallback برای handleCategorySelection
+  const handleCategorySelection = useCallback((categoryId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedCategories: prev.selectedCategories.includes(categoryId)
+        ? prev.selectedCategories.filter(id => id !== categoryId)
+        : [...prev.selectedCategories, categoryId]
+    }));
+  }, []);
+
+  // 🔧 Fix 4: useCallback برای filterUnits
+  const filterUnits = useCallback((filter: 'all' | 'residential' | 'commercial' | 'owner' | 'tenant') => {
+    let filteredIds: number[] = [];
+
+    switch (filter) {
+      case 'all':
+        filteredIds = unitsList.map(u => u.id);
+        break;
+      case 'residential':
+        filteredIds = unitsList.filter(u => !u.isCommercial).map(u => u.id);
+        break;
+      case 'commercial':
+        filteredIds = unitsList.filter(u => u.isCommercial).map(u => u.id);
+        break;
+      case 'owner':
+        filteredIds = unitsList.filter(u => u.ownerType === 'owner').map(u => u.id);
+        break;
+      case 'tenant':
+        filteredIds = unitsList.filter(u => u.ownerType === 'tenant').map(u => u.id);
+        break;
+    }
+
+    setFormData(prev => ({ ...prev, selectedUnits: filteredIds }));
+  }, [unitsList]);
+
+  // 🔧 Fix 5: بررسی تداخل شارژ - با dependencies مناسب
   useEffect(() => {
     if (formData.chargeDate && formData.selectedUnits.length > 0) {
       const currentMonth = formatJalali(formData.chargeDate, 'yyyy/MM');
@@ -94,40 +152,36 @@ export default function MonthlyChargeModal({
     }
   }, [formData.chargeDate, formData.selectedUnits, existingTransactions]);
 
-  // محاسبه شارژها با استفاده از تنظیمات
-  useEffect(() => {
-    if (formData.selectedUnits.length > 0 && formData.selectedCategories.length > 0 && normalizedUnits.length > 0) {
+  // 🔧 Fix 6: محاسبه شارژها - با useMemo
+  const calculationsResult = useMemo(() => {
+    if (formData.selectedUnits.length > 0 && formData.selectedCategories.length > 0) {
       const validUnits = formData.selectedUnits.filter(unitId => !chargeConflicts.includes(unitId));
       if (validUnits.length > 0) {
-        try {
-          const selectedActiveCategories = activeCategories.filter(cat =>
-            formData.selectedCategories.includes(cat.id)
-          );
+        const selectedActiveCategories = activeCategories.filter(cat =>
+          formData.selectedCategories.includes(cat.id)
+        );
 
-          const newCalculations = calculateBulkCharges(
-            normalizedUnits,
-            selectedActiveCategories,
-            formData.selectedCategories,
-            validUnits
-          );
-          setCalculations(newCalculations);
-        } catch (error) {
-          console.error('خطا در محاسبه شارژ:', error);
-          setCalculations([]);
-        }
-      } else {
-        setCalculations([]);
+        return calculateBulkCharges(
+          unitsList,
+          selectedActiveCategories,
+          formData.selectedCategories,
+          validUnits
+        );
       }
-    } else {
-      setCalculations([]);
     }
-  }, [formData.selectedUnits, formData.selectedCategories, normalizedUnits, chargeConflicts, activeCategories]);
+    return [];
+  }, [formData.selectedUnits, formData.selectedCategories, unitsList, chargeConflicts, activeCategories]);
 
-  // بازنشانی فرم هنگام باز شدن مودال
+  // Update calculations when result changes
+  useEffect(() => {
+    setCalculations(calculationsResult);
+  }, [calculationsResult]);
+
+  // 🔧 Fix 7: بازنشانی فرم - فقط وقتی modal باز می‌شود
   useEffect(() => {
     if (isOpen) {
       const defaultSelectedCategories = activeCategories
-        .filter(cat => currentSettings.categories[cat.id]?.isActive !== false)
+        .filter(cat => cat.isActive)
         .map(cat => cat.id);
 
       setFormData({
@@ -140,51 +194,10 @@ export default function MonthlyChargeModal({
       setCalculations([]);
       setChargeConflicts([]);
     }
-  }, [isOpen, currentSettings]);
+  }, [isOpen]); // فقط isOpen در dependency
 
-  const handleUnitSelection = (unitId: number) => {
-    setFormData(prev => ({
-      ...prev,
-      selectedUnits: prev.selectedUnits.includes(unitId)
-        ? prev.selectedUnits.filter(id => id !== unitId)
-        : [...prev.selectedUnits, unitId]
-    }));
-  };
-
-  const handleCategorySelection = (categoryId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      selectedCategories: prev.selectedCategories.includes(categoryId)
-        ? prev.selectedCategories.filter(id => id !== categoryId)
-        : [...prev.selectedCategories, categoryId]
-    }));
-  };
-
-  const filterUnits = (filter: 'all' | 'residential' | 'commercial' | 'owner' | 'tenant') => {
-    let filteredIds: number[] = [];
-
-    switch (filter) {
-      case 'all':
-        filteredIds = normalizedUnits.map(u => u.id);
-        break;
-      case 'residential':
-        filteredIds = normalizedUnits.filter(u => !u.isCommercial).map(u => u.id);
-        break;
-      case 'commercial':
-        filteredIds = normalizedUnits.filter(u => u.isCommercial).map(u => u.id);
-        break;
-      case 'owner':
-        filteredIds = normalizedUnits.filter(u => u.ownerType === 'owner').map(u => u.id);
-        break;
-      case 'tenant':
-        filteredIds = normalizedUnits.filter(u => u.ownerType === 'tenant').map(u => u.id);
-        break;
-    }
-
-    setFormData(prev => ({ ...prev, selectedUnits: filteredIds }));
-  };
-
-  const handleSubmit = () => {
+  // 🔧 Fix 8: handleSubmit با useCallback
+  const handleSubmit = useCallback(() => {
     if (calculations.length === 0 || !formData.chargeDate) return;
 
     const jalaliDate = formatJalaliDate(formData.chargeDate);
@@ -205,17 +218,15 @@ export default function MonthlyChargeModal({
 
     onSubmit(chargeTransactions);
     onClose();
-  };
+  }, [calculations, formData.chargeDate, formData.description, onSubmit, onClose]);
 
+  // محاسبات نهایی
   const totalAmount = calculations.reduce((sum, calc) => sum + calc.totalAmount, 0);
-  const selectedUnitsData = normalizedUnits.filter(unit => formData.selectedUnits.includes(unit.id));
+  const selectedUnitsData = unitsList.filter(unit => formData.selectedUnits.includes(unit.id));
   const availableUnitsData = selectedUnitsData.filter(unit => !chargeConflicts.includes(unit.id));
 
   const currentMonth = formData.chargeDate ? formatJalali(formData.chargeDate, 'MMMM') : '';
   const currentYear = formData.chargeDate ? toPersianDigits(formatJalali(formData.chargeDate, 'yyyy')) : '';
-
-  // Debug log
-  console.log('Units Data:', { unitsList, normalizedUnits, selectedUnitsData });
 
   return (
     <AnimatePresence>
@@ -302,155 +313,161 @@ export default function MonthlyChargeModal({
                         <div className="text-blue-600 dark:text-blue-400">
                           مجموع پایه: {toPersianDigits(Math.round(activeCategories.reduce((sum, cat) => sum + cat.baseAmount, 0) / 1000).toString())}K ت
                         </div>
-                        <div className="text-blue-600 dark:text-blue-400">
-                          واحدهای موجود: {toPersianDigits(normalizedUnits.length.toString())}
-                        </div>
                       </div>
-                    </div>
-
-                    {/* انتخاب واحدها */}
-                    <div className="bg-[var(--bg-color)] p-4 rounded-xl">
-                      <div className="flex justify-between items-center mb-4">
-                        <label className="block text-sm font-semibold text-[var(--text-color)]">
-                          انتخاب واحدها ({toPersianDigits(formData.selectedUnits.length)} از {toPersianDigits(normalizedUnits.length)})
-                        </label>
-                        <div className="flex gap-2 text-xs">
-                          <button
-                            onClick={() => filterUnits('all')}
-                            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                          >
-                            همه
-                          </button>
-                          <button
-                            onClick={() => filterUnits('residential')}
-                            className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-                          >
-                            مسکونی
-                          </button>
-                          <button
-                            onClick={() => filterUnits('commercial')}
-                            className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
-                          >
-                            تجاری
-                          </button>
-                          <button
-                            onClick={() => filterUnits('owner')}
-                            className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                          >
-                            مالک
-                          </button>
-                          <button
-                            onClick={() => filterUnits('tenant')}
-                            className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-                          >
-                            مستاجر
-                          </button>
-                        </div>
-                      </div>
-
-                      {normalizedUnits.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                          هیچ واحدی یافت نشد
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 max-h-64 overflow-y-auto">
-                          {normalizedUnits.map((unit) => {
-                            const isSelected = formData.selectedUnits.includes(unit.id);
-                            const hasConflict = chargeConflicts.includes(unit.id);
-                            
-                            return (
-                              <div
-                                key={unit.id}
-                                onClick={() => handleUnitSelection(unit.id)}
-                                className={`
-                                  p-3 rounded-lg border-2 cursor-pointer transition-all
-                                  ${isSelected 
-                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-                                  }
-                                  ${hasConflict 
-                                    ? 'border-red-500 bg-red-50 dark:bg-red-900/20 cursor-not-allowed' 
-                                    : ''
-                                  }
-                                `}
-                              >
-                                <div className="text-sm font-semibold text-[var(--text-color)] mb-1">
-                                  واحد {toPersianDigits(unit.unitNumber)}
-                                </div>
-                                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                  <div>متراژ: {toPersianDigits(unit.area)} متر</div>
-                                  <div>نوع: {unit.ownerType === 'owner' ? 'مالک' : 'مستاجر'}</div>
-                                  {unit.isCommercial && (
-                                    <div className="text-purple-600 dark:text-purple-400">تجاری</div>
-                                  )}
-                                  {unit.hasParking && (
-                                    <div className="text-green-600 dark:text-green-400">
-                                      پارکینگ: {toPersianDigits(unit.parkingCount)}
-                                    </div>
-                                  )}
-                                  {hasConflict && (
-                                    <div className="text-red-600 dark:text-red-400 text-xs">
-                                      تداخل شارژ
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
 
                     {/* انتخاب دسته‌های هزینه */}
                     <div className="bg-[var(--bg-color)] p-4 rounded-xl">
-                      <label className="block text-sm font-semibold text-[var(--text-color)] mb-4">
-                        دسته‌های هزینه ({toPersianDigits(formData.selectedCategories.length)} از {toPersianDigits(activeCategories.length)})
+                      <label className="block text-sm font-semibold text-[var(--text-color)] mb-3">
+                        انتخاب دسته‌های هزینه
                       </label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {activeCategories.map((category) => {
-                          const isSelected = formData.selectedCategories.includes(category.id);
-                          return (
-                            <div
-                              key={category.id}
-                              onClick={() => handleCategorySelection(category.id)}
-                              className={`
-                                p-3 rounded-lg border cursor-pointer transition-all
-                                ${isSelected 
-                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                                  : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-                                }
-                              `}
-                            >
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <div className="font-semibold text-[var(--text-color)] mb-1">
-                                    {category.title}
-                                  </div>
-                                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                                    {category.description}
-                                  </div>
-                                </div>
-                                <div className="text-sm font-semibold text-[var(--text-color)]">
-                                  {toPersianDigits((category.baseAmount / 1000).toFixed(0))}K
-                                </div>
+                        {activeCategories.map((category) => (
+                          <label key={category.id} className="flex items-start gap-3 p-3 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={formData.selectedCategories.includes(category.id)}
+                              onChange={() => handleCategorySelection(category.id)}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-[var(--text-color)]">
+                                {category.title}
+                              </div>
+                              <div className="text-xs text-[var(--text-muted)] mt-1">
+                                {category.description}
+                              </div>
+                              <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                مبلغ پایه: {toPersianDigits(category.baseAmount.toLocaleString())} تومان
+                                {category.calculationType === 'perArea' && ' (بر متر)'}
+                                {category.calculationType === 'fixed' && ' (ثابت)'}
+                                {category.calculationType === 'perUnit' && category.includeParking && ' (بر پارکینگ)'}
                               </div>
                             </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* فیلترهای سریع واحدها */}
+                    <div className="bg-[var(--bg-color)] p-4 rounded-xl">
+                      <label className="block text-sm font-semibold text-[var(--text-color)] mb-3">
+                        فیلترهای سریع انتخاب واحدها
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => filterUnits('all')}
+                          className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          همه واحدها ({toPersianDigits(unitsList.length.toString())})
+                        </button>
+                        <button
+                          onClick={() => filterUnits('residential')}
+                          className="px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                        >
+                          مسکونی ({toPersianDigits(unitsList.filter(u => !u.isCommercial).length.toString())})
+                        </button>
+                        <button
+                          onClick={() => filterUnits('commercial')}
+                          className="px-3 py-1.5 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                        >
+                          تجاری ({toPersianDigits(unitsList.filter(u => u.isCommercial).length.toString())})
+                        </button>
+                        <button
+                          onClick={() => filterUnits('owner')}
+                          className="px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                        >
+                          مالک ({toPersianDigits(unitsList.filter(u => u.ownerType === 'owner').length.toString())})
+                        </button>
+                        <button
+                          onClick={() => filterUnits('tenant')}
+                          className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                        >
+                          مستأجر ({toPersianDigits(unitsList.filter(u => u.ownerType === 'tenant').length.toString())})
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* لیست واحدها */}
+                    <div className="bg-[var(--bg-color)] p-4 rounded-xl">
+                      <label className="block text-sm font-semibold text-[var(--text-color)] mb-3">
+                        انتخاب واحدها ({toPersianDigits(formData.selectedUnits.length.toString())} انتخاب شده)
+                      </label>
+                      
+                      {chargeConflicts.length > 0 && (
+                        <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                          <div className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-1">
+                            ⚠️ هشدار: تداخل شارژ
+                          </div>
+                          <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                            واحدهای زیر قبلاً در این ماه شارژ شده‌اند: {chargeConflicts.map(id => unitsList.find(u => u.id === id)?.unitNumber).join('، ')}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-96 overflow-y-auto">
+                        {unitsList.map((unit) => {
+                          const isConflicted = chargeConflicts.includes(unit.id);
+                          const isSelected = formData.selectedUnits.includes(unit.id);
+                          
+                          return (
+                            <label
+                              key={unit.id}
+                              className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                                  : isConflicted
+                                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700 opacity-60'
+                                  : 'border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={isConflicted}
+                                onChange={() => handleUnitSelection(unit.id)}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-[var(--text-color)]">
+                                  واحد {toPersianDigits(unit.unitNumber)}
+                                </div>
+                                <div className="text-xs text-[var(--text-muted)] flex items-center gap-1">
+                                  <span>{toPersianDigits(unit.area.toString())} متر</span>
+                                  {unit.isCommercial && (
+                                    <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded text-[10px]">
+                                      تجاری
+                                    </span>
+                                  )}
+                                  {unit.ownerType === 'tenant' && (
+                                    <span className="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded text-[10px]">
+                                      مستأجر
+                                    </span>
+                                  )}
+                                  {unit.hasParking && unit.parkingCount > 0 && (
+                                    <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded text-[10px]">
+                                      {toPersianDigits(unit.parkingCount.toString())}🅿️
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* توضیحات اضافی */}
+                    {/* توضیحات */}
                     <div className="bg-[var(--bg-color)] p-4 rounded-xl">
                       <label className="block text-sm font-semibold text-[var(--text-color)] mb-2">
-                        توضیحات اضافی
+                        توضیحات (اختیاری)
                       </label>
                       <textarea
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="توضیحات اضافی برای این شارژ..."
+                        className="w-full px-3 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-secondary)] text-[var(--text-color)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows={3}
-                        className="w-full p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-color)] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="توضیحات اضافی برای شارژ این ماه..."
                       />
                     </div>
                   </div>
@@ -458,199 +475,288 @@ export default function MonthlyChargeModal({
 
                 {activeTab === 'preview' && (
                   <div className="space-y-6">
-                    {calculations.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="text-6xl mb-4">📊</div>
-                        <h3 className="text-lg font-semibold text-[var(--text-color)] mb-2">
-                          محاسبه‌ای موجود نیست
-                        </h3>
-                        <p className="text-gray-500">
-                          لطفاً واحدها و دسته‌های هزینه را انتخاب کنید
-                        </p>
-                      </div>
-                    ) : (
+                    {calculations.length > 0 ? (
                       <>
-                        <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
-                          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-2">
-                            📊 پیش‌نمایش محاسبات شارژ
-                          </h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div className="text-blue-600 dark:text-blue-400">
-                              تعداد واحد: {toPersianDigits(availableUnitsData.length)}
+                        {/* خلاصه کلی */}
+                        <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                            <div>
+                              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                {toPersianDigits(availableUnitsData.length.toString())}
+                              </div>
+                              <div className="text-sm text-[var(--text-muted)]">واحد انتخابی</div>
                             </div>
-                            <div className="text-green-600 dark:text-green-400">
-                              دسته‌ها: {toPersianDigits(formData.selectedCategories.length)}
+                            <div>
+                              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {toPersianDigits(formData.selectedCategories.length.toString())}
+                              </div>
+                              <div className="text-sm text-[var(--text-muted)]">دسته هزینه</div>
                             </div>
-                            <div className="text-purple-600 dark:text-purple-400">
-                              مجموع درآمد: {toPersianDigits((totalAmount / 1000000).toFixed(1))}M ت
+                            <div>
+                              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                                {toPersianDigits((totalAmount / 1000000).toFixed(1))} M
+                              </div>
+                              <div className="text-sm text-[var(--text-muted)]">مجموع کل</div>
                             </div>
-                            <div className="text-orange-600 dark:text-orange-400">
-                              متوسط واحد: {toPersianDigits(Math.round(totalAmount / Math.max(availableUnitsData.length, 1) / 1000))}K ت
+                            <div>
+                              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                {availableUnitsData.length > 0 ? toPersianDigits(Math.round(totalAmount / availableUnitsData.length / 1000).toString()) : '۰'} K
+                              </div>
+                              <div className="text-sm text-[var(--text-muted)]">میانگین واحد</div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid gap-4">
-                          {calculations.map((calc) => {
-                            const unit = normalizedUnits.find(u => u.id === calc.unitId);
-                            return (
-                              <div
-                                key={calc.unitId}
-                                className="bg-[var(--bg-color)] p-4 rounded-xl border border-[var(--border-color)]"
-                              >
-                                <div className="flex justify-between items-start mb-3">
-                                  <div>
-                                    <h4 className="font-semibold text-[var(--text-color)]">
-                                      واحد {toPersianDigits(calc.unitNumber)}
-                                    </h4>
-                                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                                      {unit && (
-                                        <>
-                                          متراژ: {toPersianDigits(unit.area)} متر
-                                          {unit.balconyArea && unit.balconyArea > 0 && (
-                                            <span> + {toPersianDigits(unit.balconyArea)} بالکن</span>
+                        {/* جدول محاسبات */}
+                        <div className="bg-[var(--bg-color)] rounded-xl overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead className="bg-[var(--bg-secondary)]">
+                                <tr>
+                                  <th className="px-4 py-3 text-right text-sm font-semibold text-[var(--text-color)]">واحد</th>
+                                  <th className="px-4 py-3 text-right text-sm font-semibold text-[var(--text-color)]">متراژ</th>
+                                  <th className="px-4 py-3 text-right text-sm font-semibold text-[var(--text-color)]">نوع</th>
+                                  <th className="px-4 py-3 text-right text-sm font-semibold text-[var(--text-color)]">مبلغ کل</th>
+                                  <th className="px-4 py-3 text-center text-sm font-semibold text-[var(--text-color)]">جزئیات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {calculations.map((calc, index) => {
+                                  const unit = unitsList.find(u => u.id === calc.unitId);
+                                  if (!unit) return null;
+                                  
+                                  return (
+                                    <tr key={calc.unitId} className={index % 2 === 0 ? 'bg-[var(--bg-secondary)]/30' : ''}>
+                                      <td className="px-4 py-3 text-sm font-medium text-[var(--text-color)]">
+                                        {toPersianDigits(calc.unitNumber)}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-[var(--text-color)]">
+                                        {toPersianDigits(calc.area.toString())} متر
+                                        {unit.balconyArea && unit.balconyArea > 0 && (
+                                          <span className="text-xs text-[var(--text-muted)] block">
+                                            + {toPersianDigits(unit.balconyArea.toString())} بالکن
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm">
+                                        <div className="flex flex-wrap gap-1">
+                                          {unit.isCommercial && (
+                                            <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded text-xs">
+                                              تجاری
+                                            </span>
                                           )}
-                                          {unit.isCommercial && <span> • تجاری</span>}
+                                          {unit.ownerType === 'tenant' && (
+                                            <span className="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-xs">
+                                              مستأجر
+                                            </span>
+                                          )}
                                           {unit.hasParking && (
-                                            <span> • پارکینگ: {toPersianDigits(unit.parkingCount)}</span>
+                                            <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded text-xs">
+                                              {toPersianDigits(unit.parkingCount.toString())}🅿️
+                                            </span>
                                           )}
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-lg font-bold text-green-600 dark:text-green-400">
-                                    {toPersianDigits(calc.totalAmount.toLocaleString())} ت
-                                  </div>
-                                </div>
-                                <div className="text-xs text-gray-500 space-y-1">
-                                  {calc.breakdown.map((item, index) => (
-                                    <div key={index}>{item}</div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400">
+                                        {toPersianDigits(calc.totalAmount.toLocaleString())} ت
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <details className="inline-block">
+                                          <summary className="cursor-pointer text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200">
+                                            جزئیات محاسبه
+                                          </summary>
+                                          <div className="mt-2 p-3 bg-[var(--bg-secondary)] rounded-lg text-right">
+                                            {calc.breakdown.map((item, i) => (
+                                              <div key={i} className="text-xs text-[var(--text-muted)] mb-1">
+                                                {item}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </details>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="text-6xl mb-4">📊</div>
+                        <div className="text-lg font-medium text-[var(--text-color)] mb-2">
+                          هیچ محاسبه‌ای انجام نشده
+                        </div>
+                        <div className="text-[var(--text-muted)]">
+                          لطفاً ابتدا واحدها و دسته‌های هزینه را انتخاب کنید
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {activeTab === 'summary' && (
                   <div className="space-y-6">
-                    <div className="text-center py-8">
-                      <div className="text-6xl mb-4">🎉</div>
-                      <h3 className="text-2xl font-bold text-[var(--text-color)] mb-4">
-                        آماده صدور شارژ ماهانه
-                      </h3>
-                      <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 p-6 rounded-2xl border border-green-200 dark:border-green-800 max-w-md mx-auto">
-                        <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
-                          {toPersianDigits(totalAmount.toLocaleString())} تومان
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          برای {toPersianDigits(calculations.length)} واحد
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-[var(--bg-color)] p-4 rounded-xl">
-                        <h4 className="font-semibold text-[var(--text-color)] mb-3">
-                          📊 خلاصه آمار
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span>تعداد واحد:</span>
-                            <span className="font-semibold">{toPersianDigits(calculations.length)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>دسته‌های هزینه:</span>
-                            <span className="font-semibold">{toPersianDigits(formData.selectedCategories.length)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>متوسط هر واحد:</span>
-                            <span className="font-semibold">
-                              {toPersianDigits(Math.round(totalAmount / Math.max(calculations.length, 1)).toLocaleString())} ت
-                            </span>
-                          </div>
-                          <div className="flex justify-between border-t pt-2">
-                            <span>مجموع کل:</span>
-                            <span className="font-bold text-green-600 dark:text-green-400">
-                              {toPersianDigits(totalAmount.toLocaleString())} ت
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-[var(--bg-color)] p-4 rounded-xl">
-                        <h4 className="font-semibold text-[var(--text-color)] mb-3">
-                          📋 جزئیات شارژ
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span>تاریخ شارژ:</span>
-                            <span className="font-semibold">
-                              {formData.chargeDate ? formatJalaliDate(formData.chargeDate) : 'نامشخص'}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>دوره شارژ:</span>
-                            <span className="font-semibold">{currentMonth} {currentYear}</span>
-                          </div>
-                          {chargeConflicts.length > 0 && (
-                            <div className="text-red-600 dark:text-red-400 text-xs mt-2">
-                              تداخل شارژ: {toPersianDigits(chargeConflicts.length)} واحد
+                    {calculations.length > 0 ? (
+                      <>
+                        {/* خلاصه نهایی */}
+                        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 p-6 rounded-xl border border-green-200 dark:border-green-800">
+                          <h3 className="text-lg font-bold text-green-700 dark:text-green-300 mb-4">
+                            ✅ آماده صدور شارژ - {currentMonth} {currentYear}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">تعداد واحدهای انتخابی:</span>
+                                <span className="font-medium text-[var(--text-color)]">
+                                  {toPersianDigits(availableUnitsData.length.toString())} واحد
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">تعداد دسته‌های هزینه:</span>
+                                <span className="font-medium text-[var(--text-color)]">
+                                  {toPersianDigits(formData.selectedCategories.length.toString())} دسته
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">تاریخ شارژ:</span>
+                                <span className="font-medium text-[var(--text-color)]">
+                                  {formData.chargeDate ? formatJalaliDate(formData.chargeDate) : '-'}
+                                </span>
+                              </div>
                             </div>
-                          )}
+                            <div className="space-y-3">
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">مجموع کل مبلغ:</span>
+                                <span className="font-bold text-lg text-green-600 dark:text-green-400">
+                                  {toPersianDigits(totalAmount.toLocaleString())} تومان
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">میانگین هر واحد:</span>
+                                <span className="font-medium text-[var(--text-color)]">
+                                  {availableUnitsData.length > 0 
+                                    ? toPersianDigits(Math.round(totalAmount / availableUnitsData.length).toLocaleString()) 
+                                    : '۰'} تومان
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[var(--text-muted)]">تعداد تراکنش:</span>
+                                <span className="font-medium text-[var(--text-color)]">
+                                  {toPersianDigits(calculations.length.toString())} تراکنش
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* پیش‌نمایش تراکنش‌ها */}
+                        <div className="bg-[var(--bg-color)] p-4 rounded-xl">
+                          <h4 className="text-md font-semibold text-[var(--text-color)] mb-4">
+                            پیش‌نمایش تراکنش‌های ایجاد شده
+                          </h4>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {calculations.map((calc) => (
+                              <div key={calc.unitId} className="flex justify-between items-center p-3 bg-[var(--bg-secondary)] rounded-lg">
+                                <div>
+                                  <div className="text-sm font-medium text-[var(--text-color)]">
+                                    شارژ ماه {currentMonth} {currentYear} - واحد {toPersianDigits(calc.unitNumber)}
+                                  </div>
+                                  <div className="text-xs text-[var(--text-muted)] mt-1">
+                                    {formData.description || calc.breakdown.slice(0, 2).join(' - ')}
+                                    {calc.breakdown.length > 2 && '...'}
+                                  </div>
+                                </div>
+                                <div className="text-sm font-bold text-green-600 dark:text-green-400">
+                                  {toPersianDigits(calc.totalAmount.toLocaleString())} ت
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {chargeConflicts.length > 0 && (
+                          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                            <div className="text-sm text-yellow-700 dark:text-yellow-300 font-medium mb-2">
+                              ⚠️ توجه: واحدهای با تداخل
+                            </div>
+                            <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                              {chargeConflicts.length} واحد به دلیل وجود شارژ قبلی در این ماه، از محاسبات حذف شده‌اند
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="text-6xl mb-4">📋</div>
+                        <div className="text-lg font-medium text-[var(--text-color)] mb-2">
+                          هیچ آیتمی برای صدور آماده نیست
+                        </div>
+                        <div className="text-[var(--text-muted)]">
+                          لطفاً به تب انتخاب بروید و واحدها را انتخاب کنید
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="border-t border-[var(--border-color)] p-6 flex-shrink-0">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-500">
-                    {calculations.length > 0 && (
-                      <span>
-                        مجموع درآمد: {toPersianDigits(totalAmount.toLocaleString())} تومان
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3">
+              <div className="flex justify-between items-center p-6 border-t border-[var(--border-color)] bg-[var(--bg-color)] flex-shrink-0">
+                <div className="flex gap-2">
+                  {activeTab === 'selection' && (
                     <button
-                      onClick={onClose}
-                      className="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl transition-colors"
+                      onClick={() => setActiveTab('preview')}
+                      disabled={formData.selectedUnits.length === 0 || formData.selectedCategories.length === 0}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
-                      انصراف
+                      مرحله بعد: پیش‌نمایش
                     </button>
-
-                    {activeTab !== 'summary' && (
+                  )}
+                  {activeTab === 'preview' && (
+                    <>
                       <button
-                        onClick={() => {
-                          if (activeTab === 'selection') setActiveTab('preview');
-                          else if (activeTab === 'preview') setActiveTab('summary');
-                        }}
-                        disabled={formData.selectedUnits.length === 0 || formData.selectedCategories.length === 0 || calculations.length === 0}
-                        className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-xl transition-colors"
+                        onClick={() => setActiveTab('selection')}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
                       >
-                        مرحله بعد
+                        بازگشت: انتخاب
                       </button>
-                    )}
-
-                    {activeTab === 'summary' && (
+                      <button
+                        onClick={() => setActiveTab('summary')}
+                        disabled={calculations.length === 0}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        مرحله بعد: خلاصه
+                      </button>
+                    </>
+                  )}
+                  {activeTab === 'summary' && (
+                    <>
+                      <button
+                        onClick={() => setActiveTab('preview')}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      >
+                        بازگشت: پیش‌نمایش
+                      </button>
                       <button
                         onClick={handleSubmit}
                         disabled={calculations.length === 0}
-                        className="px-6 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-xl transition-colors font-semibold"
+                        className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                       >
-                        صدور شارژ ({toPersianDigits(calculations.length)} واحد)
+                        تایید و صدور شارژ ({toPersianDigits(calculations.length.toString())} تراکنش)
                       </button>
-                    )}
-                  </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="text-sm text-[var(--text-muted)]">
+                  {calculations.length > 0 && (
+                    <div className="text-left">
+                      <div>مجموع: {toPersianDigits(totalAmount.toLocaleString())} تومان</div>
+                      <div>میانگین: {availableUnitsData.length > 0 ? toPersianDigits(Math.round(totalAmount / availableUnitsData.length).toLocaleString()) : '۰'} تومان</div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
