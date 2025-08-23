@@ -64,6 +64,7 @@ export const defaultChargeCategories: ChargeCategory[] = [
   },
 ];
 
+// محاسبه شارژ یک واحد
 export function calculateUnitCharge(
   unit: UnitChargeInfo,
   categories: ChargeCategory[],
@@ -78,7 +79,8 @@ export function calculateUnitCharge(
   const breakdown: string[] = [];
   let totalAmount = 0;
 
-  const activeCategories = categories.filter(cat => 
+  // فیلتر دسته‌های انتخاب شده و فعال
+  const activeCategories = categories.filter(cat =>
     selectedCategoryIds.includes(cat.id) && cat.isActive
   );
 
@@ -88,40 +90,43 @@ export function calculateUnitCharge(
 
     switch (category.calculationType) {
       case 'fixed':
-        amount = category.baseAmount;
-        calculation = `${category.baseAmount.toLocaleString()} تومان ثابت`;
+        amount = category.baseAmount || 0;
+        calculation = `${(category.baseAmount || 0).toLocaleString()} تومان ثابت`;
         break;
 
       case 'perArea':
-        const effectiveArea = unit.area + (unit.balconyArea || 0);
-        amount = category.baseAmount * effectiveArea;
-        calculation = `${category.baseAmount.toLocaleString()} × ${effectiveArea} متر = ${amount.toLocaleString()}`;
+        const effectiveArea = (unit.area || 0) + (unit.balconyArea || 0);
+        amount = (category.baseAmount || 0) * effectiveArea;
+        calculation = `${(category.baseAmount || 0).toLocaleString()} × ${effectiveArea} متر = ${amount.toLocaleString()}`;
         break;
 
       case 'perUnit':
         if (category.includeParking && unit.hasParking) {
-          amount = category.baseAmount * unit.parkingCount;
-          calculation = `${category.baseAmount.toLocaleString()} × ${unit.parkingCount} پارکینگ = ${amount.toLocaleString()}`;
+          const parkingCount = unit.parkingCount || 0;
+          amount = (category.baseAmount || 0) * parkingCount;
+          calculation = `${(category.baseAmount || 0).toLocaleString()} × ${parkingCount} پارکینگ = ${amount.toLocaleString()}`;
         } else if (!category.includeParking) {
-          amount = category.baseAmount;
-          calculation = `${category.baseAmount.toLocaleString()} تومان ثابت`;
+          amount = category.baseAmount || 0;
+          calculation = `${(category.baseAmount || 0).toLocaleString()} تومان ثابت`;
         }
         break;
     }
 
     // اعمال ضریب طبقه
-    if (unit.floorCoefficient !== 1.0) {
-      amount *= unit.floorCoefficient;
-      calculation += ` × ضریب طبقه ${unit.floorCoefficient}`;
+    const floorCoeff = unit.floorCoefficient || 1.0;
+    if (floorCoeff !== 1.0) {
+      amount *= floorCoeff;
+      calculation += ` × ضریب طبقه ${floorCoeff}`;
     }
 
     // اعمال ضریب تجاری
-    if (unit.isCommercial && category.commercialMultiplier > 1) {
-      amount *= category.commercialMultiplier;
-      calculation += ` × ضریب تجاری ${category.commercialMultiplier}`;
+    if (unit.isCommercial && (category.commercialMultiplier || 1) > 1) {
+      const commercialMultiplier = category.commercialMultiplier || 1;
+      amount *= commercialMultiplier;
+      calculation += ` × ضریب تجاری ${commercialMultiplier}`;
     }
 
-    amount = Math.round(amount);
+    amount = Math.round(amount || 0);
 
     categoryCalculations[category.id] = {
       categoryId: category.id,
@@ -134,15 +139,16 @@ export function calculateUnitCharge(
   }
 
   return {
-    unitId: unit.id,
-    unitNumber: unit.unitNumber,
-    area: unit.area,
-    totalAmount: Math.round(totalAmount),
+    unitId: unit.id || 0,
+    unitNumber: unit.unitNumber || '',
+    area: unit.area || 0,
+    totalAmount: Math.round(totalAmount || 0),
     categories: categoryCalculations,
     breakdown,
   };
 }
 
+// محاسبه شارژ چندین واحد
 export function calculateBulkCharges(
   units: UnitChargeInfo[],
   categories: ChargeCategory[],
@@ -150,9 +156,30 @@ export function calculateBulkCharges(
   selectedUnitIds: number[],
   coefficients?: { commercial: number; floor: number; parking: number }
 ): ChargeCalculation[] {
-  const selectedUnits = units.filter(unit => selectedUnitIds.includes(unit.id));
-  
-  return selectedUnits.map(unit => 
-    calculateUnitCharge(unit, categories, selectedCategoryIds, coefficients)
+  if (!units || !Array.isArray(units) || units.length === 0) {
+    return [];
+  }
+
+  if (!selectedUnitIds || !Array.isArray(selectedUnitIds) || selectedUnitIds.length === 0) {
+    return [];
+  }
+
+  const selectedUnits = units.filter(unit => 
+    unit && selectedUnitIds.includes(unit.id)
   );
+
+  return selectedUnits.map(unit =>
+    calculateUnitCharge(unit, categories || [], selectedCategoryIds || [], coefficients)
+  );
+}
+
+// محاسبه مجموع مبالغ پایه
+export function getTotalBaseAmount(categories: ChargeCategory[]): number {
+  if (!categories || !Array.isArray(categories)) {
+    return 0;
+  }
+  
+  return categories
+    .filter(cat => cat.isActive)
+    .reduce((sum, cat) => sum + (cat.baseAmount || 0), 0);
 }
