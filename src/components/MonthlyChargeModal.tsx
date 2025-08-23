@@ -77,20 +77,54 @@ export default function MonthlyChargeModal({
   const [activeTab, setActiveTab] = useState<'selection' | 'preview' | 'summary'>('selection');
   const [chargeConflicts, setChargeConflicts] = useState<number[]>([]);
 
-  // 🔧 Fix 1: useMemo برای activeCategories
+  // 🔧 Fix: محافظت از undefined با fallback values
   const { currentSettings, activeCategories } = useMemo(() => {
-    const settings = getCurrentYearSettings();
-    const categories = defaultChargeCategories
-      .filter(cat => settings.categories[cat.id]?.isActive !== false)
-      .map(cat => ({
-        ...cat,
-        baseAmount: settings.categories[cat.id]?.baseAmount ?? cat.baseAmount
-      }));
-    
-    return { currentSettings: settings, activeCategories: categories };
+    try {
+      const settings = getCurrentYearSettings();
+      
+      // محافظت از undefined با fallback
+      const safeSettings = {
+        year: settings?.year || 1404,
+        categories: settings?.categories || {},
+        coefficients: {
+          commercial: settings?.coefficients?.commercial || 1.5,
+          floor: settings?.coefficients?.floor || 1.0,
+          parking: settings?.coefficients?.parking || 1.0,
+          ...settings?.coefficients
+        },
+        ...settings
+      };
+      
+      const categories = defaultChargeCategories
+        .filter(cat => safeSettings.categories[cat.id]?.isActive !== false)
+        .map(cat => ({
+          ...cat,
+          baseAmount: safeSettings.categories[cat.id]?.baseAmount ?? cat.baseAmount
+        }));
+      
+      return { currentSettings: safeSettings, activeCategories: categories };
+    } catch (error) {
+      console.error('Error getting charge settings:', error);
+      
+      // Fallback در صورت خطا
+      const fallbackSettings = {
+        year: 1404,
+        categories: {},
+        coefficients: {
+          commercial: 1.5,
+          floor: 1.0,
+          parking: 1.0
+        }
+      };
+      
+      return { 
+        currentSettings: fallbackSettings, 
+        activeCategories: defaultChargeCategories 
+      };
+    }
   }, [getCurrentYearSettings]);
 
-  // 🔧 Fix 2: useCallback برای handleUnitSelection
+  // 🔧 Fix: useCallback برای handleUnitSelection
   const handleUnitSelection = useCallback((unitId: number) => {
     setFormData(prev => ({
       ...prev,
@@ -100,7 +134,7 @@ export default function MonthlyChargeModal({
     }));
   }, []);
 
-  // 🔧 Fix 3: useCallback برای handleCategorySelection
+  // 🔧 Fix: useCallback برای handleCategorySelection
   const handleCategorySelection = useCallback((categoryId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -110,7 +144,7 @@ export default function MonthlyChargeModal({
     }));
   }, []);
 
-  // 🔧 Fix 4: useCallback برای filterUnits
+  // 🔧 Fix: useCallback برای filterUnits
   const filterUnits = useCallback((filter: 'all' | 'residential' | 'commercial' | 'owner' | 'tenant') => {
     let filteredIds: number[] = [];
 
@@ -135,41 +169,53 @@ export default function MonthlyChargeModal({
     setFormData(prev => ({ ...prev, selectedUnits: filteredIds }));
   }, [unitsList]);
 
-  // 🔧 Fix 5: بررسی تداخل شارژ - با dependencies مناسب
+  // بررسی تداخل شارژ - با dependencies مناسب
   useEffect(() => {
     if (formData.chargeDate && formData.selectedUnits.length > 0) {
-      const currentMonth = formatJalali(formData.chargeDate, 'yyyy/MM');
-      const conflictingUnits = formData.selectedUnits.filter(unitId => {
-        return existingTransactions.some(transaction =>
-          transaction.relatedUnitId === unitId &&
-          transaction.isCharge &&
-          transaction.date.startsWith(currentMonth)
-        );
-      });
-      setChargeConflicts(conflictingUnits);
+      try {
+        const currentMonth = formatJalali(formData.chargeDate, 'yyyy/MM');
+        const conflictingUnits = formData.selectedUnits.filter(unitId => {
+          return existingTransactions.some(transaction =>
+            transaction.relatedUnitId === unitId &&
+            transaction.isCharge &&
+            transaction.date.startsWith(currentMonth)
+          );
+        });
+        setChargeConflicts(conflictingUnits);
+      } catch (error) {
+        console.error('Error checking charge conflicts:', error);
+        setChargeConflicts([]);
+      }
     } else {
       setChargeConflicts([]);
     }
   }, [formData.chargeDate, formData.selectedUnits, existingTransactions]);
 
-  // 🔧 Fix 6: محاسبه شارژها - با useMemo
+  // محاسبه شارژها - با useMemo و محافظت از خطا
   const calculationsResult = useMemo(() => {
-    if (formData.selectedUnits.length > 0 && formData.selectedCategories.length > 0) {
-      const validUnits = formData.selectedUnits.filter(unitId => !chargeConflicts.includes(unitId));
-      if (validUnits.length > 0) {
-        const selectedActiveCategories = activeCategories.filter(cat =>
-          formData.selectedCategories.includes(cat.id)
-        );
+    try {
+      if (formData.selectedUnits.length > 0 && formData.selectedCategories.length > 0 && activeCategories.length > 0) {
+        const validUnits = formData.selectedUnits.filter(unitId => !chargeConflicts.includes(unitId));
+        if (validUnits.length > 0) {
+          const selectedActiveCategories = activeCategories.filter(cat =>
+            formData.selectedCategories.includes(cat.id)
+          );
 
-        return calculateBulkCharges(
-          unitsList,
-          selectedActiveCategories,
-          formData.selectedCategories,
-          validUnits
-        );
+          if (selectedActiveCategories.length > 0) {
+            return calculateBulkCharges(
+              unitsList,
+              selectedActiveCategories,
+              formData.selectedCategories,
+              validUnits
+            );
+          }
+        }
       }
+      return [];
+    } catch (error) {
+      console.error('Error calculating charges:', error);
+      return [];
     }
-    return [];
   }, [formData.selectedUnits, formData.selectedCategories, unitsList, chargeConflicts, activeCategories]);
 
   // Update calculations when result changes
@@ -177,56 +223,79 @@ export default function MonthlyChargeModal({
     setCalculations(calculationsResult);
   }, [calculationsResult]);
 
-  // 🔧 Fix 7: بازنشانی فرم - فقط وقتی modal باز می‌شود
+  // بازنشانی فرم - فقط وقتی modal باز می‌شود
   useEffect(() => {
-    if (isOpen) {
-      const defaultSelectedCategories = activeCategories
-        .filter(cat => cat.isActive)
-        .map(cat => cat.id);
+    if (isOpen && activeCategories.length > 0) {
+      try {
+        const defaultSelectedCategories = activeCategories
+          .filter(cat => cat.isActive)
+          .map(cat => cat.id);
 
-      setFormData({
-        chargeDate: new Date(),
-        selectedUnits: [],
-        selectedCategories: defaultSelectedCategories,
-        description: '',
-      });
-      setActiveTab('selection');
-      setCalculations([]);
-      setChargeConflicts([]);
+        setFormData({
+          chargeDate: new Date(),
+          selectedUnits: [],
+          selectedCategories: defaultSelectedCategories,
+          description: '',
+        });
+        setActiveTab('selection');
+        setCalculations([]);
+        setChargeConflicts([]);
+      } catch (error) {
+        console.error('Error resetting form:', error);
+      }
     }
   }, [isOpen]); // فقط isOpen در dependency
 
-  // 🔧 Fix 8: handleSubmit با useCallback
+  // handleSubmit با useCallback
   const handleSubmit = useCallback(() => {
-    if (calculations.length === 0 || !formData.chargeDate) return;
+    try {
+      if (calculations.length === 0 || !formData.chargeDate) return;
 
-    const jalaliDate = formatJalaliDate(formData.chargeDate);
-    const currentMonth = formatJalali(formData.chargeDate, 'MMMM');
-    const currentYear = toPersianDigits(formatJalali(formData.chargeDate, 'yyyy'));
+      const jalaliDate = formatJalaliDate(formData.chargeDate);
+      const currentMonth = formatJalali(formData.chargeDate, 'MMMM');
+      const currentYear = toPersianDigits(formatJalali(formData.chargeDate, 'yyyy'));
 
-    const chargeTransactions: Transaction[] = calculations.map(calc => ({
-      id: Date.now() + calc.unitId,
-      title: `شارژ ماه ${currentMonth} ${currentYear}`,
-      type: 'Income' as const,
-      category: 'MonthlyCharge' as const,
-      amount: calc.totalAmount,
-      date: jalaliDate,
-      relatedUnitId: calc.unitId,
-      isCharge: true,
-      description: formData.description || calc.breakdown.join(' - '),
-    }));
+      const chargeTransactions: Transaction[] = calculations.map(calc => ({
+        id: Date.now() + calc.unitId,
+        title: `شارژ ماه ${currentMonth} ${currentYear}`,
+        type: 'Income' as const,
+        category: 'MonthlyCharge' as const,
+        amount: calc.totalAmount,
+        date: jalaliDate,
+        relatedUnitId: calc.unitId,
+        isCharge: true,
+        description: formData.description || calc.breakdown.join(' - '),
+      }));
 
-    onSubmit(chargeTransactions);
-    onClose();
+      onSubmit(chargeTransactions);
+      onClose();
+    } catch (error) {
+      console.error('Error submitting charges:', error);
+    }
   }, [calculations, formData.chargeDate, formData.description, onSubmit, onClose]);
 
-  // محاسبات نهایی
-  const totalAmount = calculations.reduce((sum, calc) => sum + calc.totalAmount, 0);
+  // محاسبات نهایی با محافظت
+  const totalAmount = calculations.reduce((sum, calc) => sum + (calc.totalAmount || 0), 0);
   const selectedUnitsData = unitsList.filter(unit => formData.selectedUnits.includes(unit.id));
   const availableUnitsData = selectedUnitsData.filter(unit => !chargeConflicts.includes(unit.id));
 
+  // 🔧 Fix: محافظت از undefined در تاریخ
   const currentMonth = formData.chargeDate ? formatJalali(formData.chargeDate, 'MMMM') : '';
   const currentYear = formData.chargeDate ? toPersianDigits(formatJalali(formData.chargeDate, 'yyyy')) : '';
+
+  // 🔧 Fix: محافظت از toString errors
+  const safeToString = (value: any, fallback = '0'): string => {
+    try {
+      if (value === null || value === undefined) return fallback;
+      return String(value);
+    } catch (error) {
+      console.error('Error converting to string:', value, error);
+      return fallback;
+    }
+  };
+
+  const safeCommercialCoefficient = safeToString(currentSettings?.coefficients?.commercial || 1.5, '1.5');
+  const safeTotalBaseAmount = Math.round(activeCategories.reduce((sum, cat) => sum + (cat.baseAmount || 0), 0) / 1000);
 
   return (
     <AnimatePresence>
@@ -301,17 +370,17 @@ export default function MonthlyChargeModal({
                     {/* نمایش تنظیمات فعلی */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
                       <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
-                        📋 تنظیمات فعلی شارژ (سال {toPersianDigits(currentSettings.year)})
+                        📋 تنظیمات فعلی شارژ (سال {toPersianDigits(safeToString(currentSettings?.year, '1404'))})
                       </h3>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                         <div className="text-blue-600 dark:text-blue-400">
-                          دسته‌های فعال: {toPersianDigits(activeCategories.length.toString())}
+                          دسته‌های فعال: {toPersianDigits(safeToString(activeCategories.length, '0'))}
                         </div>
                         <div className="text-blue-600 dark:text-blue-400">
-                          ضریب تجاری: {toPersianDigits(currentSettings.coefficients?.commercial?.toString() || '1.5')}×
+                          ضریب تجاری: {toPersianDigits(safeCommercialCoefficient)}×
                         </div>
                         <div className="text-blue-600 dark:text-blue-400">
-                          مجموع پایه: {toPersianDigits(Math.round(activeCategories.reduce((sum, cat) => sum + cat.baseAmount, 0) / 1000).toString())}K ت
+                          مجموع پایه: {toPersianDigits(safeToString(safeTotalBaseAmount, '0'))}K ت
                         </div>
                       </div>
                     </div>
@@ -338,7 +407,7 @@ export default function MonthlyChargeModal({
                                 {category.description}
                               </div>
                               <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                                مبلغ پایه: {toPersianDigits(category.baseAmount.toLocaleString())} تومان
+                                مبلغ پایه: {toPersianDigits((category.baseAmount || 0).toLocaleString())} تومان
                                 {category.calculationType === 'perArea' && ' (بر متر)'}
                                 {category.calculationType === 'fixed' && ' (ثابت)'}
                                 {category.calculationType === 'perUnit' && category.includeParking && ' (بر پارکینگ)'}
@@ -359,31 +428,31 @@ export default function MonthlyChargeModal({
                           onClick={() => filterUnits('all')}
                           className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                         >
-                          همه واحدها ({toPersianDigits(unitsList.length.toString())})
+                          همه واحدها ({toPersianDigits(safeToString(unitsList.length, '0'))})
                         </button>
                         <button
                           onClick={() => filterUnits('residential')}
                           className="px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                         >
-                          مسکونی ({toPersianDigits(unitsList.filter(u => !u.isCommercial).length.toString())})
+                          مسکونی ({toPersianDigits(safeToString(unitsList.filter(u => !u.isCommercial).length, '0'))})
                         </button>
                         <button
                           onClick={() => filterUnits('commercial')}
                           className="px-3 py-1.5 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
                         >
-                          تجاری ({toPersianDigits(unitsList.filter(u => u.isCommercial).length.toString())})
+                          تجاری ({toPersianDigits(safeToString(unitsList.filter(u => u.isCommercial).length, '0'))})
                         </button>
                         <button
                           onClick={() => filterUnits('owner')}
                           className="px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
                         >
-                          مالک ({toPersianDigits(unitsList.filter(u => u.ownerType === 'owner').length.toString())})
+                          مالک ({toPersianDigits(safeToString(unitsList.filter(u => u.ownerType === 'owner').length, '0'))})
                         </button>
                         <button
                           onClick={() => filterUnits('tenant')}
                           className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
                         >
-                          مستأجر ({toPersianDigits(unitsList.filter(u => u.ownerType === 'tenant').length.toString())})
+                          مستأجر ({toPersianDigits(safeToString(unitsList.filter(u => u.ownerType === 'tenant').length, '0'))})
                         </button>
                       </div>
                     </div>
@@ -391,7 +460,7 @@ export default function MonthlyChargeModal({
                     {/* لیست واحدها */}
                     <div className="bg-[var(--bg-color)] p-4 rounded-xl">
                       <label className="block text-sm font-semibold text-[var(--text-color)] mb-3">
-                        انتخاب واحدها ({toPersianDigits(formData.selectedUnits.length.toString())} انتخاب شده)
+                        انتخاب واحدها ({toPersianDigits(safeToString(formData.selectedUnits.length, '0'))} انتخاب شده)
                       </label>
                       
                       {chargeConflicts.length > 0 && (
@@ -400,7 +469,7 @@ export default function MonthlyChargeModal({
                             ⚠️ هشدار: تداخل شارژ
                           </div>
                           <div className="text-xs text-yellow-600 dark:text-yellow-400">
-                            واحدهای زیر قبلاً در این ماه شارژ شده‌اند: {chargeConflicts.map(id => unitsList.find(u => u.id === id)?.unitNumber).join('، ')}
+                            واحدهای زیر قبلاً در این ماه شارژ شده‌اند: {chargeConflicts.map(id => unitsList.find(u => u.id === id)?.unitNumber || '').join('، ')}
                           </div>
                         </div>
                       )}
@@ -430,10 +499,10 @@ export default function MonthlyChargeModal({
                               />
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium text-[var(--text-color)]">
-                                  واحد {toPersianDigits(unit.unitNumber)}
+                                  واحد {toPersianDigits(safeToString(unit.unitNumber, ''))}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                                  <span>{toPersianDigits(unit.area.toString())} متر</span>
+                                  <span>{toPersianDigits(safeToString(unit.area, '0'))} متر</span>
                                   {unit.isCommercial && (
                                     <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded text-[10px]">
                                       تجاری
@@ -446,7 +515,7 @@ export default function MonthlyChargeModal({
                                   )}
                                   {unit.hasParking && unit.parkingCount > 0 && (
                                     <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded text-[10px]">
-                                      {toPersianDigits(unit.parkingCount.toString())}🅿️
+                                      {toPersianDigits(safeToString(unit.parkingCount, '0'))}🅿️
                                     </span>
                                   )}
                                 </div>
@@ -482,13 +551,13 @@ export default function MonthlyChargeModal({
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                             <div>
                               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                {toPersianDigits(availableUnitsData.length.toString())}
+                                {toPersianDigits(safeToString(availableUnitsData.length, '0'))}
                               </div>
                               <div className="text-sm text-[var(--text-muted)]">واحد انتخابی</div>
                             </div>
                             <div>
                               <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                {toPersianDigits(formData.selectedCategories.length.toString())}
+                                {toPersianDigits(safeToString(formData.selectedCategories.length, '0'))}
                               </div>
                               <div className="text-sm text-[var(--text-muted)]">دسته هزینه</div>
                             </div>
@@ -528,13 +597,13 @@ export default function MonthlyChargeModal({
                                   return (
                                     <tr key={calc.unitId} className={index % 2 === 0 ? 'bg-[var(--bg-secondary)]/30' : ''}>
                                       <td className="px-4 py-3 text-sm font-medium text-[var(--text-color)]">
-                                        {toPersianDigits(calc.unitNumber)}
+                                        {toPersianDigits(safeToString(calc.unitNumber, ''))}
                                       </td>
                                       <td className="px-4 py-3 text-sm text-[var(--text-color)]">
-                                        {toPersianDigits(calc.area.toString())} متر
+                                        {toPersianDigits(safeToString(calc.area, '0'))} متر
                                         {unit.balconyArea && unit.balconyArea > 0 && (
                                           <span className="text-xs text-[var(--text-muted)] block">
-                                            + {toPersianDigits(unit.balconyArea.toString())} بالکن
+                                            + {toPersianDigits(safeToString(unit.balconyArea, '0'))} بالکن
                                           </span>
                                         )}
                                       </td>
@@ -552,13 +621,13 @@ export default function MonthlyChargeModal({
                                           )}
                                           {unit.hasParking && (
                                             <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded text-xs">
-                                              {toPersianDigits(unit.parkingCount.toString())}🅿️
+                                              {toPersianDigits(safeToString(unit.parkingCount, '0'))}🅿️
                                             </span>
                                           )}
                                         </div>
                                       </td>
                                       <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400">
-                                        {toPersianDigits(calc.totalAmount.toLocaleString())} ت
+                                        {toPersianDigits((calc.totalAmount || 0).toLocaleString())} ت
                                       </td>
                                       <td className="px-4 py-3 text-center">
                                         <details className="inline-block">
@@ -566,7 +635,7 @@ export default function MonthlyChargeModal({
                                             جزئیات محاسبه
                                           </summary>
                                           <div className="mt-2 p-3 bg-[var(--bg-secondary)] rounded-lg text-right">
-                                            {calc.breakdown.map((item, i) => (
+                                            {(calc.breakdown || []).map((item, i) => (
                                               <div key={i} className="text-xs text-[var(--text-muted)] mb-1">
                                                 {item}
                                               </div>
@@ -610,13 +679,13 @@ export default function MonthlyChargeModal({
                               <div className="flex justify-between">
                                 <span className="text-[var(--text-muted)]">تعداد واحدهای انتخابی:</span>
                                 <span className="font-medium text-[var(--text-color)]">
-                                  {toPersianDigits(availableUnitsData.length.toString())} واحد
+                                  {toPersianDigits(safeToString(availableUnitsData.length, '0'))} واحد
                                 </span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-[var(--text-muted)]">تعداد دسته‌های هزینه:</span>
                                 <span className="font-medium text-[var(--text-color)]">
-                                  {toPersianDigits(formData.selectedCategories.length.toString())} دسته
+                                  {toPersianDigits(safeToString(formData.selectedCategories.length, '0'))} دسته
                                 </span>
                               </div>
                               <div className="flex justify-between">
@@ -644,7 +713,7 @@ export default function MonthlyChargeModal({
                               <div className="flex justify-between">
                                 <span className="text-[var(--text-muted)]">تعداد تراکنش:</span>
                                 <span className="font-medium text-[var(--text-color)]">
-                                  {toPersianDigits(calculations.length.toString())} تراکنش
+                                  {toPersianDigits(safeToString(calculations.length, '0'))} تراکنش
                                 </span>
                               </div>
                             </div>
@@ -661,15 +730,15 @@ export default function MonthlyChargeModal({
                               <div key={calc.unitId} className="flex justify-between items-center p-3 bg-[var(--bg-secondary)] rounded-lg">
                                 <div>
                                   <div className="text-sm font-medium text-[var(--text-color)]">
-                                    شارژ ماه {currentMonth} {currentYear} - واحد {toPersianDigits(calc.unitNumber)}
+                                    شارژ ماه {currentMonth} {currentYear} - واحد {toPersianDigits(safeToString(calc.unitNumber, ''))}
                                   </div>
                                   <div className="text-xs text-[var(--text-muted)] mt-1">
-                                    {formData.description || calc.breakdown.slice(0, 2).join(' - ')}
-                                    {calc.breakdown.length > 2 && '...'}
+                                    {formData.description || (calc.breakdown || []).slice(0, 2).join(' - ')}
+                                    {(calc.breakdown || []).length > 2 && '...'}
                                   </div>
                                 </div>
                                 <div className="text-sm font-bold text-green-600 dark:text-green-400">
-                                  {toPersianDigits(calc.totalAmount.toLocaleString())} ت
+                                  {toPersianDigits((calc.totalAmount || 0).toLocaleString())} ت
                                 </div>
                               </div>
                             ))}
@@ -744,7 +813,7 @@ export default function MonthlyChargeModal({
                         disabled={calculations.length === 0}
                         className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
                       >
-                        تایید و صدور شارژ ({toPersianDigits(calculations.length.toString())} تراکنش)
+                        تایید و صدور شارژ ({toPersianDigits(safeToString(calculations.length, '0'))} تراکنش)
                       </button>
                     </>
                   )}
