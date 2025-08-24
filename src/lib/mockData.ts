@@ -1,10 +1,99 @@
-// src/lib/mockData.ts
-import { Unit } from '@/types/index.d';
+export const mockUnits = [
+  {
+    id: 1,
+    unitNumber: '101',
+    floor: 1,
+    area: 85,
+    balconyArea: 12,
+    isCommercial: false,
+    ownerName: 'احمد محمدی',
+    ownerPhone: '09121234567',
+    tenantName: 'علی رضایی',
+    tenantPhone: '09129876543',
+    hasParking: true,
+    parkingCount: 1,
+    status: 'TenantOccupied',
+    residentSince: '1403/01/15'
+  },
+  {
+    id: 2,
+    unitNumber: '102',
+    floor: 1,
+    area: 90,
+    balconyArea: 15,
+    isCommercial: false,
+    ownerName: 'فاطمه احمدی',
+    ownerPhone: '09121234568',
+    tenantName: '',
+    tenantPhone: '',
+    hasParking: true,
+    parkingCount: 1,
+    status: 'OwnerOccupied',
+    residentSince: '1402/08/10'
+  },
+  {
+    id: 3,
+    unitNumber: '103',
+    floor: 1,
+    area: 75,
+    balconyArea: 8,
+    isCommercial: false,
+    ownerName: 'محسن کریمی',
+    ownerPhone: '09121234569',
+    tenantName: '',
+    tenantPhone: '',
+    hasParking: false,
+    parkingCount: 0,
+    status: 'Vacant',
+    residentSince: undefined
+  },
+  {
+    id: 4,
+    unitNumber: '104',
+    floor: 1,
+    area: 120,
+    balconyArea: 0,
+    isCommercial: true,
+    ownerName: 'شرکت آریا',
+    ownerPhone: '02188776655',
+    tenantName: 'مهدی نوری',
+    tenantPhone: '09121234570',
+    hasParking: true,
+    parkingCount: 2,
+    status: 'TenantOccupied',
+    residentSince: '1403/02/01'
+  }
+  // ... می‌توانید واحدهای بیشتری اضافه کنید
+];
 
-export const mockUnits: Unit[] = [
-  { id: 1, unitNumber: '101', floor: 1, area: 85.5, type: 'Residential', ownerName: 'علی رضایی', ownerContact: '09121111111', ownerNationalId: '0011223344', status: 'OwnerOccupied', residentName: 'علی رضایی', residentContact: '09121111111', residentNationalId: '0011223344', residentCount: 3, parkingSpots: 1, hasStorage: true, balance: -50000, ownerSince: '1398/05/10', residentSince: '1398/05/10' },
-  { id: 2, unitNumber: '102', floor: 1, area: 92, type: 'Residential', ownerName: 'مریم احمدی', ownerContact: '09122222222', ownerNationalId: '1122334455', status: 'TenantOccupied', residentName: 'سارا کریمی', residentContact: '09355555555', residentNationalId: '2233445566', residentCount: 2, parkingSpots: 1, hasStorage: true, balance: 0, ownerSince: '1400/11/20', residentSince: '1402/03/01' },
-  { id: 3, unitNumber: '103', floor: 1, area: 85, type: 'Residential', ownerName: 'شرکت سازنده', ownerContact: '02188888888', ownerNationalId: null, status: 'Vacant', residentName: ' - ', residentContact: ' - ', residentNationalId: null, residentCount: 0, parkingSpots: 1, hasStorage: false, balance: 120000, ownerSince: '1397/01/01', residentSince: null },
-  { id: 4, unitNumber: '201', floor: 2, area: 120, type: 'Residential', ownerName: 'رضا قاسمی', ownerContact: '09123333333', ownerNationalId: '3344556677', status: 'OwnerOccupied', residentName: 'رضا قاسمی', residentContact: '09123333333', residentNationalId: '3344556677', residentCount: 4, parkingSpots: 2, hasStorage: true, balance: -250000, ownerSince: '1401/02/15', residentSince: '1401/02/15' },
-  { id: 5, unitNumber: 'G1', floor: 0, area: 250, type: 'Commercial', ownerName: 'فروشگاه زنجیره‌ای', ownerContact: '09124444444', ownerNationalId: null, status: 'TenantOccupied', residentName: 'مدیر فروشگاه', residentContact: '09109999999', residentNationalId: null, residentCount: 10, parkingSpots: 0, hasStorage: false, balance: 0, ownerSince: '1399/06/01', residentSince: '1399/07/01' },
+export const mockTransactions = [
+  {
+    id: 1,
+    title: 'شارژ ماهانه - شهریور ۱۴۰۳',
+    amount: 2400000,
+    type: 'Income',
+    category: 'MonthlyCharge',
+    date: '1403/06/01',
+    description: 'شارژ ماهانه واحد 101',
+    relatedUnitId: 101
+  },
+  {
+    id: 2,
+    title: 'تعمیر آسانسور',
+    amount: 850000,
+    type: 'Expense',
+    category: 'Repairs',
+    date: '1403/05/28',
+    description: 'تعویض موتور آسانسور'
+  },
+  {
+    id: 3,
+    title: 'قبض برق مشاعات',
+    amount: 320000,
+    type: 'Expense',
+    category: 'Utilities',
+    date: '1403/05/25',
+    description: 'قبض برق راه‌پله و پارکینگ'
+  }
+  // ... می‌توانید تراکنش‌های بیشتری اضافه کنید
 ];

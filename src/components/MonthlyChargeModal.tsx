@@ -11,6 +11,15 @@ import { calculateBulkCharges, defaultChargeCategories } from '@/lib/chargeCalcu
 import { format as formatJalali } from 'date-fns-jalali';
 import { useChargeSettings } from '@/app/context/ChargeSettingsContext';
 import { mockUnitsData } from '@/data/mockUnits';
+import { 
+  CalendarDaysIcon,
+  CurrencyDollarIcon,
+  HomeIcon,
+  BuildingOffice2Icon,
+  XMarkIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon
+} from '@heroicons/react/24/outline';
 
 // Import sub-components
 import ChargeSelectionTab from '@/components/MonthlyCharge/ChargeSelectionTab';
@@ -76,6 +85,15 @@ export default function MonthlyChargeModal({
       };
     }
   }, [getCurrentYearSettings]);
+
+  const formatAmountWithUnit = (amount: number): string => {
+  if (amount >= 1000000) {
+    return `${toPersianDigits(Math.round(amount / 1000000).toString())} میلیون`;
+  } else if (amount >= 1000) {
+    return `${toPersianDigits(Math.round(amount / 1000).toString())} هزار`;
+  }
+  return toPersianDigits(amount.toString());
+};
 
   // Handlers
   const handleUnitSelection = useCallback((unitId: number) => {
@@ -230,15 +248,14 @@ export default function MonthlyChargeModal({
             <div className="flex flex-col h-full">
               {/* Header */}
               <div className="flex justify-between items-center p-6 border-b border-[var(--border-color)] flex-shrink-0">
-                <h2 className="text-xl font-bold text-[var(--text-color)]">
-                  صدور شارژ ماهانه - {currentMonth} {currentYear}
-                </h2>
-                <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-color)] transition-colors">
-                  <svg className="w-5 h-5 text-[var(--text-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+  <h2 className="text-xl font-bold text-[var(--text-color)] flex items-center gap-2">
+    <CurrencyDollarIcon className="w-6 h-6 text-green-500" />
+    صدور شارژ ماهانه - {currentMonth} {currentYear}
+  </h2>
+  <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--bg-color)] transition-colors">
+    <XMarkIcon className="w-5 h-5 text-[var(--text-color)]" />
+  </button>
+</div>
 
               {/* Tabs */}
               <div className="flex border-b border-[var(--border-color)] bg-[var(--bg-color)] flex-shrink-0">

@@ -1,17 +1,28 @@
-// src/components/UnitFormModal.tsx
-
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Unit } from '@/types/index.d';
-import { useEffect, useState } from 'react'; // حذف useRef
+import { useEffect, useState } from 'react';
 import { toPersianDigits, formatJalaliDate, parseJalaliDate } from '@/lib/utils';
+import { 
+  XMarkIcon, 
+  HomeIcon, 
+  BuildingOfficeIcon, 
+  UserIcon, 
+  UsersIcon,
+  Square3Stack3DIcon,
+  TruckIcon,
+  CalendarDaysIcon
+} from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
-// حذف import useOnClickOutside
 
 const CustomDatePicker = dynamic(() => import('./CustomDatePicker'), { ssr: false });
 
-type UnitFormData = Omit<Unit, 'id' | 'residentSince'> & { residentSince: Date | null };
+type UnitFormData = Omit<Unit, 'id' | 'residentSince'> & { 
+  residentSince: Date | null;
+  hasParking: boolean;
+  parkingCount: number;
+};
 
 interface UnitFormModalProps {
   isOpen: boolean;
@@ -21,16 +32,23 @@ interface UnitFormModalProps {
 }
 
 const defaultFormState: UnitFormData = {
-  unitNumber: '', floor: 0, area: 0, ownerName: '', residentName: '',
-  ownerNationalId: '', residentNationalId: '', residentCount: 1,
-  residentSince: null, status: 'Vacant'
+  unitNumber: '',
+  floor: 0,
+  area: 0,
+  ownerName: '',
+  residentName: '',
+  ownerNationalId: '',
+  residentNationalId: '',
+  residentCount: 1,
+  residentSince: null,
+  status: 'Vacant',
+  hasParking: false,
+  parkingCount: 0
 };
 
 export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }: UnitFormModalProps) {
   const [formData, setFormData] = useState<UnitFormData>(defaultFormState);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-
-  // حذف modalContentRef و useOnClickOutside
 
   useEffect(() => {
     if (isOpen) {
@@ -39,6 +57,8 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
         setFormData({
           ...initialData,
           residentSince: initialData.residentSince ? parseJalaliDate(initialData.residentSince) : null,
+          hasParking: (initialData as any).hasParking || false,
+          parkingCount: (initialData as any).parkingCount || 0
         });
       } else {
         setFormData(defaultFormState);
@@ -62,11 +82,19 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
         residentSince: null,
       }));
     }
-  }, [formData.status]);
+  }, [formData.status, formData.ownerName, formData.ownerNationalId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const newValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    
+    setFormData((prev) => ({ 
+      ...prev, 
+      [name]: newValue,
+      // اگر پارکینگ غیرفعال شد، تعداد را صفر کن
+      ...(name === 'hasParking' && !newValue ? { parkingCount: 0 } : {})
+    }));
+    
     if (errors[name]) {
       setErrors(prev => ({...prev, [name]: ''}));
     }
@@ -81,16 +109,25 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
 
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
+    
     if (!formData.unitNumber.trim()) newErrors.unitNumber = 'وارد کردن شماره واحد الزامی است.';
     if (formData.floor < 0) newErrors.floor = 'طبقه نمی‌تواند منفی باشد.';
     if (formData.area <= 0) newErrors.area = 'مساحت باید بیشتر از صفر باشد.';
     if (!formData.ownerName.trim()) newErrors.ownerName = 'وارد کردن نام مالک الزامی است.';
     if (!formData.ownerNationalId.trim()) newErrors.ownerNationalId = 'وارد کردن کد ملی مالک الزامی است.';
+    
     if (formData.status === 'TenantOccupied') {
       if (!formData.residentName.trim()) newErrors.residentName = 'وارد کردن نام ساکن الزامی است.';
       if (!formData.residentNationalId.trim()) newErrors.residentNationalId = 'وارد کردن کد ملی ساکن الزامی است.';
     }
-    if (formData.status !== 'Vacant' && !formData.residentSince) newErrors.residentSince = 'انتخاب تاریخ سکونت الزامی است.';
+    
+    if (formData.status !== 'Vacant' && !formData.residentSince) {
+      newErrors.residentSince = 'انتخاب تاریخ سکونت الزامی است.';
+    }
+    
+    if (formData.hasParking && formData.parkingCount <= 0) {
+      newErrors.parkingCount = 'تعداد پارکینگ باید بیشتر از صفر باشد.';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -105,6 +142,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
       floor: Number(formData.floor),
       area: Number(formData.area),
       residentCount: Number(formData.residentCount),
+      parkingCount: Number(formData.parkingCount),
       residentSince: formData.residentSince ? formatJalaliDate(formData.residentSince) : undefined,
     });
     onClose();
@@ -120,25 +158,37 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
-          onClick={onClose} // فقط با دکمه‌ها بسته می‌شود
+          onClick={onClose}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-[var(--bg-secondary)] rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-[var(--border-color)]"
-            onClick={(e) => e.stopPropagation()} // جلوگیری از بسته شدن با کلیک روی مودال
+            className="bg-[var(--bg-secondary)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-[var(--border-color)]"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 border-b border-[var(--border-color)]">
-              <h2 className="text-xl font-bold text-[var(--text-color)]">{modalTitle}</h2>
+            <div className="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[var(--text-color)] flex items-center gap-2">
+                <Square3Stack3DIcon className="w-6 h-6 text-[var(--accent-color)]" />
+                {modalTitle}
+              </h2>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-[var(--bg-color)] rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* اطلاعات واحد */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2">اطلاعات واحد</h3>
-                  
+                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
+                    <HomeIcon className="w-5 h-5" />
+                    اطلاعات واحد
+                  </h3>
+
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-color)] mb-1">شماره واحد *</label>
                     <input
@@ -151,38 +201,76 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                     />
                     {errors.unitNumber && <p className="text-red-500 text-sm mt-1">{errors.unitNumber}</p>}
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--text-color)] mb-1">طبقه *</label>
-                    <input
-                      type="number"
-                      name="floor"
-                      value={formData.floor}
-                      onChange={handleChange}
-                      className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                      placeholder="مثال: ۱"
-                    />
-                    {errors.floor && <p className="text-red-500 text-sm mt-1">{errors.floor}</p>}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">طبقه *</label>
+                      <input
+                        type="number"
+                        name="floor"
+                        value={formData.floor}
+                        onChange={handleChange}
+                        className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
+                        placeholder="مثال: ۱"
+                      />
+                      {errors.floor && <p className="text-red-500 text-sm mt-1">{errors.floor}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">مساحت (متر مربع) *</label>
+                      <input
+                        type="number"
+                        name="area"
+                        value={formData.area}
+                        onChange={handleChange}
+                        className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
+                        placeholder="مثال: ۸۰"
+                      />
+                      {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area}</p>}
+                    </div>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--text-color)] mb-1">مساحت (متر مربع) *</label>
-                    <input
-                      type="number"
-                      name="area"
-                      value={formData.area}
-                      onChange={handleChange}
-                      className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                      placeholder="مثال: ۸۰"
-                    />
-                    {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area}</p>}
+
+                  {/* پارکینگ */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name="hasParking"
+                        checked={formData.hasParking}
+                        onChange={handleChange}
+                        className="rounded border-[var(--border-color)]"
+                      />
+                      <label className="text-sm font-medium text-[var(--text-color)] flex items-center gap-2">
+                        <TruckIcon className="w-4 h-4" />
+                        دارای پارکینگ
+                      </label>
+                    </div>
+                    
+                    {formData.hasParking && (
+                      <div>
+                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1">تعداد پارکینگ *</label>
+                        <input
+                          type="number"
+                          name="parkingCount"
+                          value={formData.parkingCount}
+                          onChange={handleChange}
+                          min="1"
+                          className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
+                          placeholder="مثال: ۱"
+                        />
+                        {errors.parkingCount && <p className="text-red-500 text-sm mt-1">{errors.parkingCount}</p>}
+                      </div>
+                    )}
                   </div>
                 </div>
-                
+
                 {/* اطلاعات مالک */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2">اطلاعات مالک</h3>
-                  
+                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
+                    <UserIcon className="w-5 h-5" />
+                    اطلاعات مالک
+                  </h3>
+
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-color)] mb-1">نام مالک *</label>
                     <input
@@ -195,7 +283,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                     />
                     {errors.ownerName && <p className="text-red-500 text-sm mt-1">{errors.ownerName}</p>}
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-color)] mb-1">کد ملی مالک *</label>
                     <input
@@ -210,11 +298,14 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                   </div>
                 </div>
               </div>
-              
+
               {/* اطلاعات سکونت */}
               <div className="mt-6 space-y-4">
-                <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2">اطلاعات سکونت</h3>
-                
+                <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
+                  <UsersIcon className="w-5 h-5" />
+                  اطلاعات سکونت
+                </h3>
+
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-color)] mb-1">وضعیت واحد</label>
                   <select
@@ -228,7 +319,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                     <option value="TenantOccupied">مستاجر ساکن است</option>
                   </select>
                 </div>
-                
+
                 {formData.status !== 'Vacant' && (
                   <>
                     <div>
@@ -246,7 +337,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                       />
                       {errors.residentName && <p className="text-red-500 text-sm mt-1">{errors.residentName}</p>}
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-[var(--text-color)] mb-1">
                         {formData.status === 'OwnerOccupied' ? 'کد ملی مالک' : 'کد ملی ساکن'} *
@@ -262,10 +353,13 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                       />
                       {errors.residentNationalId && <p className="text-red-500 text-sm mt-1">{errors.residentNationalId}</p>}
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1">تعداد ساکنین</label>
+                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1 flex items-center gap-2">
+                          <UsersIcon className="w-4 h-4" />
+                          تعداد ساکنین
+                        </label>
                         <input
                           type="number"
                           name="residentCount"
@@ -275,9 +369,12 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                           placeholder="مثال: ۴"
                         />
                       </div>
-                      
+
                       <div>
-                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1">تاریخ سکونت *</label>
+                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1 flex items-center gap-2">
+                          <CalendarDaysIcon className="w-4 h-4" />
+                          تاریخ سکونت *
+                        </label>
                         <CustomDatePicker
                           value={formData.residentSince}
                           onChange={handleDateChange('residentSince')}
@@ -289,10 +386,23 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
                   </>
                 )}
               </div>
-              
+
               <div className="pt-6 flex justify-end gap-3">
-                <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg transition-colors" style={{backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)'}}>انصراف</button>
-                <button type="submit" className="px-6 py-2 rounded-lg text-white font-semibold transition-transform duration-200 hover:scale-105" style={{backgroundColor: 'var(--accent-color)'}}>ذخیره</button>
+                <button 
+                  type="button" 
+                  onClick={onClose} 
+                  className="px-4 py-2 rounded-lg transition-colors" 
+                  style={{backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)'}}
+                >
+                  انصراف
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-6 py-2 rounded-lg text-white font-semibold transition-transform duration-200 hover:scale-105" 
+                  style={{backgroundColor: 'var(--accent-color)'}}
+                >
+                  ذخیره
+                </button>
               </div>
             </form>
           </motion.div>

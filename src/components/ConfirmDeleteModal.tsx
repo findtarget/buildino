@@ -1,20 +1,28 @@
-// src/components/ConfirmDeleteModal.tsx
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import {
+  ExclamationTriangleIcon,
+  XMarkIcon,
+  TrashIcon
+} from '@heroicons/react/24/outline';
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  title?: string;
-  message?: string;
+  title: string;
+  message: string;
+  itemName?: string;
 }
 
 export default function ConfirmDeleteModal({
-  isOpen, onClose, onConfirm, title = 'تایید حذف',
-  message = 'آیا از حذف این آیتم مطمئن هستید؟ این عملیات غیرقابل بازگشت است.',
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  itemName
 }: ConfirmDeleteModalProps) {
   return (
     <AnimatePresence>
@@ -24,47 +32,77 @@ export default function ConfirmDeleteModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          // F: [اصلاح حیاتی] رویداد onClick={onClose} از این دیواره حذف شد.
+          onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full max-w-md p-6 rounded-2xl relative"
-            style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
-            onClick={(e) => e.stopPropagation()} // جلوگیری از هرگونه انتشار رویداد کلیک
+            onClick={(e) => e.stopPropagation()}
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="w-full max-w-md p-6 rounded-2xl"
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)'
+            }}
           >
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
-                <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 text-right">
-                <h3 className="text-lg font-bold" style={{ color: 'var(--text-color)' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-red-500/20">
+                  <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                </div>
+                <h2 className="text-lg font-bold text-red-500">
                   {title}
-                </h3>
-                <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {message}
-                </p>
+                </h2>
               </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
-                style={{ backgroundColor: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }}
+                className="p-1 rounded-full hover:bg-white/10 transition-colors"
               >
-                لغو
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="mb-6">
+              <p className="text-sm opacity-80 leading-relaxed">
+                {message}
+              </p>
+              {itemName && (
+                <div 
+                  className="mt-3 p-3 rounded-lg"
+                  style={{ backgroundColor: 'var(--bg-color)' }}
+                >
+                  <p className="text-sm font-medium">
+                    آیتم مورد نظر: <span className="font-bold">{itemName}</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg border transition-colors"
+                style={{
+                  backgroundColor: 'var(--bg-color)',
+                  borderColor: 'var(--border-color)',
+                  color: 'var(--text-color)'
+                }}
+              >
+                انصراف
               </button>
               <button
                 onClick={() => {
                   onConfirm();
                   onClose();
                 }}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors"
+                className="px-4 py-2 rounded-lg bg-red-500 text-white font-semibold transition-all hover:bg-red-600 hover:scale-105 flex items-center gap-2"
               >
-                حذف
+                <TrashIcon className="w-4 h-4" />
+                حذف کن
               </button>
             </div>
           </motion.div>

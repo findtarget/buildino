@@ -1,12 +1,18 @@
 // src/app/context/ChargeSettingsContext.tsx
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ChargeCategory } from '@/types/charge';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+
+interface ChargeCategory {
+  id: string;
+  title: string;
+  baseAmount: number;
+  isActive: boolean;
+}
 
 interface ChargeSettings {
   year: number;
-  categories: Record<string, { baseAmount?: number; isActive?: boolean }>;
+  categories: Record<string, ChargeCategory>;
   coefficients: {
     commercial: number;
     floor: number;
@@ -15,68 +21,97 @@ interface ChargeSettings {
 }
 
 interface ChargeSettingsContextType {
+  currentYear: number;
+  setCurrentYear: (year: number) => void;
   getCurrentYearSettings: () => ChargeSettings;
-  updateSettings: (settings: Partial<ChargeSettings>) => void;
-  resetToDefaults: () => void;
+  updateCategorySettings: (categoryId: string, updates: Partial<ChargeCategory>) => void;
+  updateCoefficients: (coefficients: Partial<ChargeSettings['coefficients']>) => void;
 }
 
 const ChargeSettingsContext = createContext<ChargeSettingsContextType | undefined>(undefined);
 
 const defaultSettings: ChargeSettings = {
-  year: 1404,
-  categories: {},
+  year: 1403,
+  categories: {
+    maintenance: { id: 'maintenance', title: 'تعمیرات و نگهداری', baseAmount: 120000, isActive: true },
+    cleaning: { id: 'cleaning', title: 'نظافت و بهداشت', baseAmount: 80000, isActive: true },
+    security: { id: 'security', title: 'حراست و نگهبانی', baseAmount: 250000, isActive: true },
+    utilities: { id: 'utilities', title: 'مشاعات و قبوض', baseAmount: 90000, isActive: true },
+    management: { id: 'management', title: 'مدیریت ساختمان', baseAmount: 180000, isActive: true },
+    parking: { id: 'parking', title: 'نگهداری پارکینگ', baseAmount: 50000, isActive: true }
+  },
   coefficients: {
     commercial: 1.5,
     floor: 1.0,
-    parking: 1.0,
+    parking: 1.0
   }
 };
 
 export function ChargeSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<ChargeSettings>(defaultSettings);
+  const [currentYear, setCurrentYear] = useState(1403);
+  const [settings, setSettings] = useState<Record<number, ChargeSettings>>({
+    1403: defaultSettings
+  });
 
   useEffect(() => {
-    const stored = localStorage.getItem('chargeSettings');
-    if (stored) {
+    const savedSettings = localStorage.getItem('chargeSettings');
+    if (savedSettings) {
       try {
-        const parsed = JSON.parse(stored);
-        setSettings({ ...defaultSettings, ...parsed });
+        setSettings(JSON.parse(savedSettings));
       } catch (error) {
-        console.error('Error loading charge settings:', error);
+        console.error('Error loading saved settings:', error);
       }
     }
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('chargeSettings', JSON.stringify(settings));
+  }, [settings]);
+
   const getCurrentYearSettings = (): ChargeSettings => {
-    return settings;
+    return settings[currentYear] || defaultSettings;
   };
 
-  const updateSettings = (newSettings: Partial<ChargeSettings>) => {
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
-    localStorage.setItem('chargeSettings', JSON.stringify(updated));
+  const updateCategorySettings = (categoryId: string, updates: Partial<ChargeCategory>) => {
+    setSettings(prev => ({
+      ...prev,
+      [currentYear]: {
+        ...prev[currentYear],
+        categories: {
+          ...prev[currentYear]?.categories,
+          [categoryId]: { ...prev[currentYear]?.categories[categoryId], ...updates }
+        }
+      }
+    }));
   };
 
-  const resetToDefaults = () => {
-    setSettings(defaultSettings);
-    localStorage.setItem('chargeSettings', JSON.stringify(defaultSettings));
+  const updateCoefficients = (coefficients: Partial<ChargeSettings['coefficients']>) => {
+    setSettings(prev => ({
+      ...prev,
+      [currentYear]: {
+        ...prev[currentYear],
+        coefficients: { ...prev[currentYear]?.coefficients, ...coefficients }
+      }
+    }));
   };
 
   return (
     <ChargeSettingsContext.Provider value={{
+      currentYear,
+      setCurrentYear,
       getCurrentYearSettings,
-      updateSettings,
-      resetToDefaults
+      updateCategorySettings,
+      updateCoefficients
     }}>
       {children}
     </ChargeSettingsContext.Provider>
   );
 }
 
-export function useChargeSettings() {
+export const useChargeSettings = () => {
   const context = useContext(ChargeSettingsContext);
   if (context === undefined) {
     throw new Error('useChargeSettings must be used within a ChargeSettingsProvider');
   }
   return context;
-}
+};

@@ -1,9 +1,8 @@
-// src/components/AccountingTable.tsx
 'use client';
 
 import { Transaction } from '@/types/index.d';
 import { toPersianDigits, parseJalaliDate, formatCurrency, formatJalaliDate } from '@/lib/utils';
-import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface AccountingTableProps {
   transactions: Transaction[];
@@ -70,7 +69,7 @@ export default function AccountingTable({ transactions, onEdit, onDelete }: Acco
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center justify-center gap-4">
                     <button onClick={() => onEdit(tx)} className="text-[var(--text-color-muted)] hover:text-blue-500 transition-colors" title="ویرایش">
-                      <PencilSquareIcon className="w-5 h-5" />
+                      <PencilIcon className="w-5 h-5" />
                     </button>
                     <button onClick={() => onDelete(tx.id)} className="text-[var(--text-color-muted)] hover:text-rose-500 transition-colors" title="حذف">
                       <TrashIcon className="w-5 h-5" />

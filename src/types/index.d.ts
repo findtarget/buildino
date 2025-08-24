@@ -22,6 +22,7 @@ export interface Unit {
   balance: number;
   ownerSince: string | null;
   residentSince: string | null;
+  parkingCount?: number;
 }
 
 // F: [جدید] تعریف انواع داده برای ماژول حسابداری
