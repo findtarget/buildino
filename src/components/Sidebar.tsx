@@ -1,7 +1,6 @@
 // src/components/Sidebar.tsx
 'use client';
 
-// F: آیکون‌های مورد نیاز از جمله BuildingOfficeIcon اینجا هستند
 import { HomeIcon, BuildingOfficeIcon, ChartBarIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -13,7 +12,7 @@ interface SidebarProps {
   open?: boolean;
 }
 
-// F: آرایه منو که شامل "مدیریت واحدها" نیز می‌باشد
+// F: حذف تنظیمات از منوی سایدبار - فقط صفحات اصلی
 const menuItems = [
   { label: 'داشبورد', icon: HomeIcon, href: '/dashboard' },
   { label: 'مدیریت واحدها', icon: BuildingOfficeIcon, href: '/units' },
@@ -50,7 +49,6 @@ export default function Sidebar({
   const NavLinks = () => (
     <nav className="space-y-4">
       {menuItems.map((item) => {
-        // F: منطق تشخیص لینک فعال که مسیر روت ('/') را معادل '/dashboard' در نظر می‌گیرد
         const isActive = pathname === item.href || (item.href === '/dashboard' && pathname === '/');
         return (
           <button
@@ -79,7 +77,7 @@ export default function Sidebar({
   if (!mobile) {
     return (
       <aside
-        className="h-full w-64 p-6 transition-colors duration-300 flex-shrink-0 hidden md:flex md:flex-col" // F: اضافه کردن کلاس‌های فلکس برای اطمینان از چیدمان
+        className="h-full w-64 p-6 transition-colors duration-300 flex-shrink-0 hidden md:flex md:flex-col"
         style={{
           backgroundColor: 'var(--bg-secondary)',
           color: 'var(--text-color)',
@@ -97,12 +95,11 @@ export default function Sidebar({
     );
   }
 
-  // سایدبار موبایل (با انیمیشن)
+  // سایدبار موبایل
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop با افکت "شیشه مات" */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -112,7 +109,6 @@ export default function Sidebar({
             onClick={onClose}
           />
 
-          {/* پنل سایدبار */}
           <motion.aside
             initial={{ x: '100%' }}
             animate={{ x: 0 }}

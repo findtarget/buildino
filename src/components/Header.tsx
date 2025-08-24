@@ -9,11 +9,13 @@ import {
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
   UserCircleIcon,
+  SunIcon,
+  MoonIcon,
 } from '@heroicons/react/24/outline';
+import { GlobeAltIcon } from '@heroicons/react/24/solid';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useSettings } from '../app/context/SettingsContext';
+import { useTheme } from '@/app/context/ThemeContext';
 
-// F: پراپ onMenuClick را برای ارتباط با والد (ClientLayoutWrapper) دریافت می‌کنیم
 interface HeaderProps {
   onMenuClick: () => void;
 }
@@ -21,7 +23,16 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const { setSettingsOpen } = useSettings(); // F: برای باز کردن پنل تنظیمات از کانتکست استفاده می‌کنیم
+  const { theme, setTheme } = useTheme();
+
+  const themes = [
+    { key: 'light' as const, label: 'روشن', icon: SunIcon },
+    { key: 'dark' as const, label: 'تیره', icon: MoonIcon },
+    { key: 'green' as const, label: 'طبیعی', icon: GlobeAltIcon },
+  ];
+
+  const currentTheme = themes.find(t => t.key === theme) || themes[0];
+  const nextTheme = themes[(themes.findIndex(t => t.key === theme) + 1) % themes.length];
 
   return (
     <header
@@ -33,9 +44,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
         border: '1px solid var(--border-color)',
       }}
     >
-      {/* --- سمت راست هدر --- */}
+      {/* سمت راست هدر */}
       <div className="flex items-center gap-4">
-        {/* F: نمایش دکمه منو فقط در موبایل، که تابع والد را صدا می‌زند */}
         {isMobile && (
           <button onClick={onMenuClick} aria-label="باز کردن منو">
             <Bars3Icon
@@ -52,8 +62,28 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </h1>
       </div>
 
-      {/* --- سمت چپ هدر (منوی کاربری یکپارچه) --- */}
+      {/* سمت چپ هدر */}
       <div className="flex items-center gap-4">
+        {/* Theme Switcher */}
+        <button
+          onClick={() => setTheme(nextTheme.key)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/10"
+          title={`تغییر به تم ${nextTheme.label}`}
+          style={{
+            border: '1px solid var(--border-color)',
+            backgroundColor: 'var(--bg-color)',
+          }}
+        >
+          <span className="text-sm font-semibold hidden sm:inline">
+            {currentTheme.label}
+          </span>
+          <currentTheme.icon 
+            className="w-5 h-5" 
+            style={{ color: 'var(--accent-color)' }}
+          />
+        </button>
+
+        {/* User Menu */}
         <Menu as="div" className="relative inline-block text-left">
           <div>
             <Menu.Button className="flex items-center rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--bg-secondary)] focus:ring-[var(--accent-color)]">
@@ -97,7 +127,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 <Menu.Item>
                   {({ active }) => (
                     <button
-                      onClick={() => setSettingsOpen(true)}
+                      onClick={() => router.push('/settings')}
                       className={`${
                         active ? 'bg-[var(--accent-color-light)] text-[var(--accent-color)]' : 'text-[var(--text-color)]'
                       } group flex w-full items-center rounded-md px-2 py-2 text-sm justify-end`}

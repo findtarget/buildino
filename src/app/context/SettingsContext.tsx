@@ -1,30 +1,32 @@
 // src/app/context/SettingsContext.tsx
-
 'use client';
 
-import { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode } from 'react';
+
+// F: حالا که settings به صفحه مستقل تبدیل شده، ممکنه این context رو نیاز نباشه
+// اما برای سازگاری نگه می‌داریمش
 
 interface SettingsContextType {
-  isSettingsOpen: boolean;
-  setSettingsOpen: (isOpen: boolean) => void;
+  // در آینده تنظیمات دیگه رو اینجا اضافه می‌کنیم
+  placeholder?: boolean;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [isSettingsOpen, setSettingsOpen] = useState(false);
+export const SettingsProvider = ({ children }: { children: ReactNode }) => {
+  const value = {
+    placeholder: true,
+  };
 
   return (
-    <SettingsContext.Provider value={{ isSettingsOpen, setSettingsOpen }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   );
-}
+};
 
-export function useSettings() {
-  const context = useContext(SettingsContext);
-  if (context === undefined) {
-    throw new Error('useSettings must be used within a SettingsProvider');
-  }
-  return context;
-}
+export const useSettings = () => {
+  const ctx = useContext(SettingsContext);
+  if (!ctx) throw new Error("useSettings must be used within SettingsProvider");
+  return ctx;
+};
