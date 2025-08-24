@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { EnhancedTransaction, TransactionStatus, Vendor, DocumentAttachment } from '@/types/accounting.d';
+import { EnhancedTransaction, TransactionStatus, Vendor, DocumentAttachment } from '@/types/accounting';
 import { toPersianDigits, formatJalaliDate, parseJalaliDate } from '@/lib/utils';
 import { TransactionService, getNextTransactionNumber } from '@/lib/transactionUtils';
 import { defaultChartOfAccounts, categoryAccountMapping } from '@/lib/chartOfAccounts';

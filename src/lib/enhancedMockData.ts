@@ -1,5 +1,5 @@
 // src/lib/enhancedMockData.ts
-import { EnhancedTransaction, Vendor, Budget, TransactionStatus } from '@/types/accounting.d';
+import { EnhancedTransaction, Vendor, Budget, TransactionStatus } from '@/types/accounting';
 import { categoryAccountMapping } from './chartOfAccounts';
 
 export const mockVendors: Vendor[] = [

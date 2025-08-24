@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ReportConfig, ReportFilters, ReportColumn, ChartConfig } from '@/types/reports.d';
-import { TransactionStatus } from '@/types/accounting.d';
+import { ReportConfig, ReportFilters, ReportColumn, ChartConfig } from '@/types/reports';
+import { TransactionStatus } from '@/types/accounting';
 import { toPersianDigits, formatCurrency } from '@/lib/utils';
 import {
   ChartBarIcon,

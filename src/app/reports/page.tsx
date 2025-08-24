@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ReportBuilder from '@/components/ReportBuilder';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
-import { ReportConfig, AnalyticsMetrics } from '@/types/reports.d';
+import { ReportConfig, AnalyticsMetrics } from '@/types/reports';
 import { ReportsService } from '@/lib/reportsService';
 import { mockEnhancedTransactions } from '@/lib/mockAccountingData';
 import {

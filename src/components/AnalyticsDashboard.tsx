@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Line, Bar, Doughnut, Area } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,12 +17,12 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { AnalyticsMetrics } from '@/types/reports.d';
+import { AnalyticsMetrics } from '@/types/reports';
 import { toPersianDigits, formatCurrency } from '@/lib/utils';
 import {
   BanknotesIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
   ChartBarIcon,
   HomeIcon,
   CalendarDaysIcon,
@@ -90,7 +90,7 @@ export default function AnalyticsDashboard({
       value: formatCurrency(metrics.totalExpenses),
       change: -2.1,
       changeText: '۲.۱%',
-      icon: TrendingDownIcon,
+      icon: ArrowTrendingDownIcon,
       color: 'rose',
       trend: 'down'
     },
@@ -99,7 +99,7 @@ export default function AnalyticsDashboard({
       value: formatCurrency(metrics.netIncome),
       change: metrics.profitMargin,
       changeText: `${toPersianDigits(metrics.profitMargin.toFixed(1))}%`,
-      icon: TrendingUpIcon,
+      icon: ArrowTrendingUpIcon,
       color: metrics.netIncome >= 0 ? 'emerald' : 'rose',
       trend: metrics.netIncome >= 0 ? 'up' : 'down'
     },
@@ -255,21 +255,20 @@ export default function AnalyticsDashboard({
             />
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {(['week', 'month', 'quarter', 'year'] as const).map(period => (
             <button
               key={period}
               onClick={() => setSelectedPeriod(period)}
-              className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                selectedPeriod === period
+              className={`px-3 py-2 rounded-lg text-sm transition-colors ${selectedPeriod === period
                   ? 'bg-blue-500 text-white'
                   : 'border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
-              }`}
+                }`}
             >
-              {period === 'week' ? 'هفتگی' : 
-               period === 'month' ? 'ماهانه' :
-               period === 'quarter' ? 'فصلی' : 'سالانه'}
+              {period === 'week' ? 'هفتگی' :
+                period === 'month' ? 'ماهانه' :
+                  period === 'quarter' ? 'فصلی' : 'سالانه'}
             </button>
           ))}
         </div>
@@ -299,12 +298,11 @@ export default function AnalyticsDashboard({
                   {kpi.value}
                 </p>
                 <div className="flex items-center gap-2">
-                  {kpi.trend === 'up' && <TrendingUpIcon className="w-4 h-4 text-emerald-500" />}
-                  {kpi.trend === 'down' && <TrendingDownIcon className="w-4 h-4 text-rose-500" />}
-                  <span className={`text-sm ${
-                    kpi.trend === 'up' ? 'text-emerald-600' :
-                    kpi.trend === 'down' ? 'text-rose-600' : 'text-gray-600'
-                  }`}>
+                  {kpi.trend === 'up' && <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />}
+                  {kpi.trend === 'down' && <ArrowTrendingDownIcon className="w-4 h-4 text-rose-500" />}
+                  <span className={`text-sm ${kpi.trend === 'up' ? 'text-emerald-600' :
+                      kpi.trend === 'down' ? 'text-rose-600' : 'text-gray-600'
+                    }`}>
                     {kpi.changeText} نسبت به ماه قبل
                   </span>
                 </div>
@@ -327,8 +325,8 @@ export default function AnalyticsDashboard({
             <h3 className="text-lg font-semibold">روند ماهانه درآمد و هزینه</h3>
             <ClockIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
           </div>
-          <Line 
-            data={monthlyTrendsData} 
+          <Line
+            data={monthlyTrendsData}
             options={{
               ...chartOptions,
               plugins: {
@@ -337,7 +335,7 @@ export default function AnalyticsDashboard({
                   display: false
                 }
               }
-            }} 
+            }}
           />
         </motion.div>
 
@@ -352,7 +350,7 @@ export default function AnalyticsDashboard({
             <h3 className="text-lg font-semibold">توزیع هزینه‌ها</h3>
             <ChartBarIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
           </div>
-          <Doughnut 
+          <Doughnut
             data={expenseCategoriesData}
             options={{
               responsive: true,
@@ -379,7 +377,7 @@ export default function AnalyticsDashboard({
             <h3 className="text-lg font-semibold">منابع درآمد</h3>
             <BanknotesIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
           </div>
-          <Bar 
+          <Bar
             data={{
               labels: metrics.topIncomeCategories.map(c => c.category),
               datasets: [{
@@ -453,7 +451,7 @@ export default function AnalyticsDashboard({
               {metrics.monthlyTrends.map((trend, index) => {
                 const previousNet = index > 0 ? metrics.monthlyTrends[index - 1].net : trend.net;
                 const change = previousNet !== 0 ? ((trend.net - previousNet) / Math.abs(previousNet)) * 100 : 0;
-                
+
                 return (
                   <tr key={trend.month} className="hover:bg-[var(--bg-color)] transition-colors">
                     <td className="px-6 py-4 text-sm font-medium">{trend.month}</td>
@@ -467,13 +465,13 @@ export default function AnalyticsDashboard({
                     <td className="px-6 py-4 text-sm">
                       <div className="flex items-center gap-1">
                         {change > 0 ? (
-                          <TrendingUpIcon className="w-4 h-4 text-emerald-500" />
+                          <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />
                         ) : change < 0 ? (
-                          <TrendingDownIcon className="w-4 h-4 text-rose-500" />
+                          <ArrowTrendingDownIcon className="w-4 h-4 text-rose-500" />
                         ) : null}
                         <span className={
                           change > 0 ? 'text-emerald-600' :
-                          change < 0 ? 'text-rose-600' : 'text-gray-600'
+                            change < 0 ? 'text-rose-600' : 'text-gray-600'
                         }>
                           {toPersianDigits(Math.abs(change).toFixed(1))}%
                         </span>
