@@ -2,369 +2,322 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { EnhancedTransaction, TransactionStatus, TransactionType } from '@/types/accounting';
-import { mockEnhancedTransactions, getVendorName } from '@/lib/mockAccountingData';
-import { toPersianDigits, formatCurrency } from '@/lib/utils';
+import { toPersianDigits, formatCurrency, formatJalaliDate, parseJalaliDate } from '@/lib/utils';
+import { getVendorName } from '@/lib/mockAccountingData';
 import { getAccountByCode } from '@/lib/chartOfAccounts';
-import {
-  EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  ArrowsUpDownIcon,
-  TagIcon,
-  DocumentIcon
-} from '@heroicons/react/24/outline';
+import { PencilSquareIcon, TrashIcon, EyeIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface AccountingTableProps {
-  transactions?: EnhancedTransaction[];
+  transactions: EnhancedTransaction[];
+  onEdit: (transaction: EnhancedTransaction) => void;
+  onDelete: (transactionId: number) => void;
+  onView?: (transaction: EnhancedTransaction) => void;
+  onUpdateStatus?: (transactionId: number, status: TransactionStatus) => void;
 }
 
-const statusColors = {
-  [TransactionStatus.Posted]: 'bg-emerald-100 text-emerald-800',
-  [TransactionStatus.Approved]: 'bg-blue-100 text-blue-800',
-  [TransactionStatus.Pending]: 'bg-amber-100 text-amber-800',
-};
-
-const statusLabels = {
-  [TransactionStatus.Posted]: 'ثبت شده',
-  [TransactionStatus.Approved]: 'تایید شده', 
+// ترجمه‌های فارسی
+const statusTranslations: Record<TransactionStatus, string> = {
   [TransactionStatus.Pending]: 'در انتظار',
+  [TransactionStatus.Approved]: 'تایید شده',
+  [TransactionStatus.Posted]: 'ثبت شده',
+  [TransactionStatus.Cancelled]: 'لغو شده'
 };
 
-const typeColors = {
-  [TransactionType.Income]: 'text-emerald-600',
-  [TransactionType.Expense]: 'text-rose-600',
-};
-
-const typeLabels = {
-  [TransactionType.Income]: 'درآمد',
-  [TransactionType.Expense]: 'هزینه',
-};
-
-const categoryLabels: Record<string, string> = {
+const categoryTranslations: Record<string, string> = {
   'MonthlyCharge': 'شارژ ماهانه',
-  'Parking': 'پارکینگ',
+  'ParkingRental': 'اجاره پارکینگ',
+  'MiscellaneousIncome': 'درآمد متفرقه',
   'Repairs': 'تعمیرات',
+  'Utilities': 'قبوض و مشاعات',
+  'Salaries': 'حقوق',
   'Cleaning': 'نظافت',
-  'Utilities': 'مشاعات',
-  'Administrative': 'اداری'
+  'Miscellaneous': 'متفرقه',
+  'Elevator': 'آسانسور',
+  'Electricity': 'برق',
+  'Water': 'آب',
+  'Gas': 'گاز'
+};
+
+const tagTranslations: Record<string, string> = {
+  'monthly': 'ماهانه',
+  'repair': 'تعمیر',
+  'elevator': 'آسانسور',
+  'urgent': 'فوری',
+  'utilities': 'قبوض',
+  'electricity': 'برق',
+  'common': 'مشاعات',
+  'unit-101': 'واحد ۱۰۱',
+  'unit-102': 'واحد ۱۰۲',
+  'unit-103': 'واحد ۱۰۳'
+};
+
+const getStatusColor = (status: TransactionStatus): string => {
+  switch (status) {
+    case TransactionStatus.Pending: return 'text-yellow-500';
+    case TransactionStatus.Approved: return 'text-blue-500';
+    case TransactionStatus.Posted: return 'text-green-500';
+    case TransactionStatus.Cancelled: return 'text-red-500';
+    default: return 'text-gray-500';
+  }
 };
 
 export default function AccountingTable({ 
-  transactions = mockEnhancedTransactions 
+  transactions, 
+  onEdit, 
+  onDelete, 
+  onView,
+  onUpdateStatus 
 }: AccountingTableProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<TransactionStatus | 'all'>('all');
-  const [filterType, setFilterType] = useState<TransactionType | 'all'>('all');
-  const [sortField, setSortField] = useState<keyof EnhancedTransaction>('date');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  // Filter and sort transactions
-  const filteredTransactions = transactions
-    .filter(transaction => {
-      const matchesSearch = transaction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          transaction.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          transaction.transactionNumber.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
-      const matchesType = filterType === 'all' || transaction.type === filterType;
-      
-      return matchesSearch && matchesStatus && matchesType;
-    })
-    .sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
-      
-      if (sortField === 'finalAmount') {
-        aValue = Number(aValue);
-        bValue = Number(bValue);
-      }
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
-      
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-  const handleSort = (field: keyof EnhancedTransaction) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  const toggleRowExpansion = (id: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
     } else {
-      setSortField(field);
-      setSortDirection('desc');
+      newExpanded.add(id);
     }
+    setExpandedRows(newExpanded);
   };
 
-  const getSortIcon = (field: keyof EnhancedTransaction) => {
-    if (sortField !== field) return <ArrowsUpDownIcon className="w-4 h-4 text-gray-400" />;
-    return <ArrowsUpDownIcon className={`w-4 h-4 ${sortDirection === 'desc' ? 'text-blue-600' : 'text-blue-600 rotate-180'}`} />;
+  // مرتب‌سازی تراکنش‌ها بر اساس تاریخ
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    const dateA = parseJalaliDate(a.date);
+    const dateB = parseJalaliDate(b.date);
+    if (!dateA || !dateB) return 0;
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  // محاسبه مانده جاری
+  const calculateRunningBalance = () => {
+    const finalBalance = sortedTransactions.reduce((acc, tx) => {
+      return acc + (tx.type === TransactionType.Income ? tx.finalAmount : -tx.finalAmount);
+    }, 0);
+    return finalBalance;
   };
+
+  let runningBalance = calculateRunningBalance();
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center justify-between p-4 bg-[var(--bg-color)] rounded-lg border border-[var(--border-color)]">
-        <div className="flex flex-wrap gap-4">
-          <div className="relative">
-            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="جستجو در تراکنش‌ها..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-secondary)] text-sm w-64"
-            />
-          </div>
-          
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as TransactionStatus | 'all')}
-            className="px-3 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-secondary)] text-sm"
-          >
-            <option value="all">همه وضعیت‌ها</option>
-            <option value={TransactionStatus.Posted}>ثبت شده</option>
-            <option value={TransactionStatus.Approved}>تایید شده</option>
-            <option value={TransactionStatus.Pending}>در انتظار</option>
-          </select>
-          
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as TransactionType | 'all')}
-            className="px-3 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-secondary)] text-sm"
-          >
-            <option value="all">همه انواع</option>
-            <option value={TransactionType.Income}>درآمد</option>
-            <option value={TransactionType.Expense}>هزینه</option>
-          </select>
-        </div>
-        
-        <div className="flex items-center gap-2 text-sm text-[var(--text-color-muted)]">
-          <FunnelIcon className="w-4 h-4" />
-          {toPersianDigits(filteredTransactions.length)} تراکنش از {toPersianDigits(transactions.length)}
-        </div>
-      </div>
+      {/* جدول اصلی */}
+      <div className="overflow-x-auto rounded-lg shadow-sm" style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+        <table className="min-w-full text-right divide-y divide-[var(--border-color)] text-sm">
+          <thead style={{ backgroundColor: 'var(--bg-color)' }}>
+            <tr>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-16">ردیف</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-24">شماره تراکنش</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-20">تاریخ</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)]">عنوان / شرح</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-20">حساب</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-24">بدهکار</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-24">بستانکار</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-24">مانده</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] w-20">وضعیت</th>
+              <th className="px-3 py-3 text-xs font-semibold text-[var(--text-color-muted)] text-center w-28">عملیات</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-color)] text-[var(--text-color)]">
+            {sortedTransactions.map((tx, index) => {
+              const currentBalance = runningBalance;
+              runningBalance -= (tx.type === TransactionType.Income ? tx.finalAmount : -tx.finalAmount);
+              const isExpanded = expandedRows.has(tx.id);
+              const account = getAccountByCode(tx.accountCode);
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-[var(--border-color)]">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-[var(--bg-color)]">
-              <tr>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('transactionNumber')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
+              return (
+                <>
+                  <tr 
+                    key={tx.id} 
+                    className="hover:bg-[var(--bg-color)] transition-colors duration-200 cursor-pointer"
+                    onClick={() => toggleRowExpansion(tx.id)}
                   >
-                    شماره تراکنش
-                    {getSortIcon('transactionNumber')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('date')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    تاریخ
-                    {getSortIcon('date')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('title')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    عنوان
-                    {getSortIcon('title')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('category')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    دسته‌بندی
-                    {getSortIcon('category')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('type')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    نوع
-                    {getSortIcon('type')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('finalAmount')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    مبلغ نهایی
-                    {getSortIcon('finalAmount')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">حساب</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">
-                  <button
-                    onClick={() => handleSort('status')}
-                    className="flex items-center gap-2 hover:text-[var(--text-color)] transition-colors"
-                  >
-                    وضعیت
-                    {getSortIcon('status')}
-                  </button>
-                </th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">عملیات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-color)]">
-              {filteredTransactions.map((transaction, index) => {
-                const account = getAccountByCode(transaction.accountCode);
-                const vendorName = getVendorName(transaction.vendorId);
-                
-                return (
-                  <motion.tr
-                    key={transaction.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="hover:bg-[var(--bg-color)] transition-colors"
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-[var(--text-color)]">
-                      {transaction.transactionNumber}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">
+                      {toPersianDigits(sortedTransactions.length - index)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-[var(--text-color-muted)]">
-                      {toPersianDigits(transaction.date)}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs font-mono">
+                      {toPersianDigits(tx.transactionNumber)}
                     </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="text-sm font-medium text-[var(--text-color)]">
-                          {transaction.title}
-                        </div>
-                        {transaction.description && (
-                          <div className="text-xs text-[var(--text-color-muted)] mt-1">
-                            {transaction.description}
-                          </div>
-                        )}
-                        {transaction.tags && transaction.tags.length > 0 && (
-                          <div className="flex items-center gap-1 mt-2">
-                            <TagIcon className="w-3 h-3 text-gray-400" />
-                            <div className="flex gap-1">
-                              {transaction.tags.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                                  {tag}
-                                </span>
-                              ))}
-                              {transaction.tags.length > 2 && (
-                                <span className="text-xs text-gray-500">+{toPersianDigits(transaction.tags.length - 2)}</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">
+                      {toPersianDigits(tx.date)}
+                    </td>
+                    <td className="px-3 py-2 max-w-xs">
+                      <div className="font-medium text-sm truncate">{tx.title}</div>
+                      <div className="text-xs text-[var(--text-color-muted)] mt-1">
+                        <span>{categoryTranslations[tx.category] || tx.category}</span>
+                        {tx.subCategory && <span> • {categoryTranslations[tx.subCategory] || tx.subCategory}</span>}
+                        {tx.relatedUnitId && <span> • واحد {toPersianDigits(tx.relatedUnitId)}</span>}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {categoryLabels[transaction.category] || transaction.category}
-                      </span>
-                      {transaction.subCategory && (
-                        <div className="text-xs text-[var(--text-color-muted)] mt-1">
-                          {transaction.subCategory}
+                      {tx.tags && tx.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {tx.tags.slice(0, 2).map((tag, i) => (
+                            <span 
+                              key={i} 
+                              className="inline-block px-2 py-0.5 text-xs rounded-full bg-[var(--accent-color)]/10 text-[var(--accent-color)] border border-[var(--accent-color)]/20"
+                            >
+                              {tagTranslations[tag] || tag}
+                            </span>
+                          ))}
+                          {tx.tags.length > 2 && (
+                            <span className="text-xs text-[var(--text-color-muted)]">
+                              +{toPersianDigits(tx.tags.length - 2)}
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className={`font-medium ${typeColors[transaction.type]}`}>
-                        {typeLabels[transaction.type]}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm">
-                        <div className={`font-semibold ${typeColors[transaction.type]}`}>
-                          {formatCurrency(transaction.finalAmount)}
-                        </div>
-                        {(transaction.taxAmount > 0 || transaction.discountAmount > 0) && (
-                          <div className="text-xs text-[var(--text-color-muted)] mt-1">
-                            {transaction.baseAmount !== transaction.finalAmount && (
-                              <>
-                                اصل: {formatCurrency(transaction.baseAmount)}
-                                {transaction.taxAmount > 0 && (
-                                  <> + مالیات: {formatCurrency(transaction.taxAmount)}</>
-                                )}
-                                {transaction.discountAmount > 0 && (
-                                  <> - تخفیف: {formatCurrency(transaction.discountAmount)}</>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">
+                      <div className="font-mono">{toPersianDigits(tx.accountCode)}</div>
+                      <div className="text-xs text-[var(--text-color-muted)] truncate">
+                        {account?.title.slice(0, 15) || 'نامشخص'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div>
-                        <div className="font-medium text-[var(--text-color)]">
-                          {transaction.accountCode}
-                        </div>
-                        <div className="text-xs text-[var(--text-color-muted)]">
-                          {account?.title || 'نامشخص'}
-                        </div>
-                      </div>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-rose-500 font-semibold">
+                      {tx.type === TransactionType.Expense ? formatCurrency(tx.finalAmount) : '–'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[transaction.status]}`}>
-                        {statusLabels[transaction.status]}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-emerald-500 font-semibold">
+                      {tx.type === TransactionType.Income ? formatCurrency(tx.finalAmount) : '–'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs font-bold">
+                      {formatCurrency(currentBalance)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                        {statusTranslations[tx.status]}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="text-blue-600 hover:text-blue-900 transition-colors"
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onView?.(tx); }} 
+                          className="text-[var(--text-color-muted)] hover:text-blue-500 transition-colors p-1" 
                           title="مشاهده جزئیات"
                         >
                           <EyeIcon className="w-4 h-4" />
                         </button>
-                        <button
-                          className="text-amber-600 hover:text-amber-900 transition-colors"
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onEdit(tx); }} 
+                          className="text-[var(--text-color-muted)] hover:text-blue-500 transition-colors p-1" 
                           title="ویرایش"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <PencilSquareIcon className="w-4 h-4" />
                         </button>
-                        {transaction.attachments && transaction.attachments.length > 0 && (
-                          <div className="relative">
-                            <DocumentIcon className="w-4 h-4 text-gray-500" />
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                              {toPersianDigits(transaction.attachments.length)}
-                            </span>
-                          </div>
+                        {tx.status === TransactionStatus.Pending && onUpdateStatus && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(tx.id, TransactionStatus.Approved); }} 
+                            className="text-[var(--text-color-muted)] hover:text-green-500 transition-colors p-1" 
+                            title="تایید"
+                          >
+                            <CheckCircleIcon className="w-4 h-4" />
+                          </button>
                         )}
-                        <button
-                          className="text-red-600 hover:text-red-900 transition-colors"
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onDelete(tx.id); }} 
+                          className="text-[var(--text-color-muted)] hover:text-rose-500 transition-colors p-1" 
                           title="حذف"
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  </tr>
+                  
+                  {/* ردیف جزئیات توسعه‌یافته */}
+                  {isExpanded && (
+                    <tr className="bg-[var(--bg-color)]/50">
+                      <td colSpan={10} className="px-6 py-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <h4 className="font-semibold text-[var(--accent-color)] mb-2">جزئیات مالی</h4>
+                            <div className="space-y-1 text-xs">
+                              <div>مبلغ پایه: {formatCurrency(tx.baseAmount)}</div>
+                              {tx.taxAmount > 0 && <div>مالیات: {formatCurrency(tx.taxAmount)}</div>}
+                              {tx.discountAmount > 0 && <div>تخفیف: {formatCurrency(tx.discountAmount)}</div>}
+                              <div className="font-semibold">مبلغ نهایی: {formatCurrency(tx.finalAmount)}</div>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-semibold text-[var(--accent-color)] mb-2">اطلاعات تکمیلی</h4>
+                            <div className="space-y-1 text-xs">
+                              <div>تاریخ ایجاد: {toPersianDigits(tx.createdAt)}</div>
+                              {tx.vendorId && <div>فروشنده: {getVendorName(tx.vendorId)}</div>}
+                              {tx.description && <div>توضیحات: {tx.description}</div>}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-semibold text-[var(--accent-color)] mb-2">پیوست‌ها و تگ‌ها</h4>
+                            <div className="space-y-2 text-xs">
+                              {tx.attachments && tx.attachments.length > 0 && (
+                                <div>
+                                  <span className="font-medium">فایل‌ها:</span>
+                                  <div className="mt-1 space-y-1">
+                                    {tx.attachments.map((file, i) => (
+                                      <div key={i} className="text-blue-500 hover:underline cursor-pointer">
+                                        {file}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {tx.tags && tx.tags.length > 0 && (
+                                <div>
+                                  <span className="font-medium">تگ‌ها:</span>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {tx.tags.map((tag, i) => (
+                                      <span 
+                                        key={i} 
+                                        className="inline-block px-2 py-0.5 rounded-full bg-[var(--accent-color)]/10 text-[var(--accent-color)] border border-[var(--accent-color)]/20"
+                                      >
+                                        {tagTranslations[tag] || tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* خلاصه جدول */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-[var(--text-color-muted)] mb-2">کل درآمدها</h3>
+          <p className="text-lg font-bold text-emerald-500">
+            {formatCurrency(
+              transactions
+                .filter(t => t.type === TransactionType.Income)
+                .reduce((sum, t) => sum + t.finalAmount, 0)
+            )}
+          </p>
+        </div>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-[var(--text-color-muted)] mb-2">کل هزینه‌ها</h3>
+          <p className="text-lg font-bold text-rose-500">
+            {formatCurrency(
+              transactions
+                .filter(t => t.type === TransactionType.Expense)
+                .reduce((sum, t) => sum + t.finalAmount, 0)
+            )}
+          </p>
+        </div>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-[var(--text-color-muted)] mb-2">مانده نهایی</h3>
+          <p className="text-lg font-bold text-[var(--text-color)]">
+            {formatCurrency(calculateRunningBalance())}
+          </p>
         </div>
       </div>
-
-      {filteredTransactions.length === 0 && (
-        <div className="text-center py-12 text-[var(--text-color-muted)]">
-          <DocumentIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <p>هیچ تراکنشی یافت نشد</p>
-        </div>
-      )}
     </div>
   );
 }
