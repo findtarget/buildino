@@ -325,6 +325,20 @@ export const defaultChartOfAccounts: ChartOfAccount[] = [
   },
 ];
 
+export const categoryAccountMapping: { [key: string]: string } = {
+  // Income Categories
+  'MonthlyCharge': '4111',       // مرتبط با 'شارژ عادی'
+  'ParkingRental': '4210',       // مرتبط با 'درآمد پارکینگ'
+  'MiscellaneousIncome': '4200', // مرتبط با 'سایر درآمدها'
+
+  // Expense Categories
+  'Repairs': '5110',             // مرتبط با 'هزینه تعمیر و نگهداری'
+  'Utilities': '5130',           // مرتبط با 'هزینه مشاعات'
+  'Salaries': '5210',             // مرتبط با 'حقوق و دستمزد'
+  'Cleaning': '5120',             // مرتبط با 'هزینه نظافت'
+  'Miscellaneous': '5100',       // مرتبط با 'هزینه‌های عملیاتی' (به عنوان یک هزینه کلی)
+};
+
 // Helper functions
 export const getAccountByCode = (code: string): ChartOfAccount | undefined => {
   return defaultChartOfAccounts.find(account => account.code === code);

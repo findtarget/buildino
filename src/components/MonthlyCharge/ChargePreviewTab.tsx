@@ -1,9 +1,9 @@
-// src/components/MonthlyCharge/ChargePreviewTab.tsx
 'use client';
 
 import { UnitChargeInfo, ChargeCalculation } from '@/types/charge';
 import { toPersianDigits } from '@/lib/utils';
 import { safeToString } from '@/lib/safeUtils';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 interface ChargePreviewTabProps {
   calculations: ChargeCalculation[];
@@ -16,7 +16,7 @@ export default function ChargePreviewTab({
   unitsList,
   totalAmount
 }: ChargePreviewTabProps) {
-  const availableUnitsData = unitsList.filter(unit => 
+  const availableUnitsData = unitsList.filter(unit =>
     calculations.some(calc => calc.unitId === unit.id)
   );
 
@@ -53,15 +53,15 @@ export default function ChargePreviewTab({
           </div>
           <div>
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {toPersianDigits((totalAmount / 1000000).toFixed(1))} M
+              {formatCurrency(totalAmount)}
             </div>
             <div className="text-sm text-[var(--text-muted)]">مجموع کل</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {availableUnitsData.length > 0 
-                ? toPersianDigits(Math.round(totalAmount / availableUnitsData.length / 1000).toString()) 
-                : '۰'} K
+              {availableUnitsData.length > 0
+                ? formatCurrency(Math.round(totalAmount / availableUnitsData.length))
+                : '۰ تومان'}
             </div>
             <div className="text-sm text-[var(--text-muted)]">میانگین واحد</div>
           </div>
@@ -85,7 +85,7 @@ export default function ChargePreviewTab({
               {calculations.map((calc, index) => {
                 const unit = unitsList.find(u => u.id === calc.unitId);
                 if (!unit) return null;
-                
+
                 return (
                   <tr key={calc.unitId} className={index % 2 === 0 ? 'bg-[var(--bg-secondary)]/30' : ''}>
                     <td className="px-4 py-3 text-sm font-medium text-[var(--text-color)]">
@@ -119,7 +119,7 @@ export default function ChargePreviewTab({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400">
-                      {toPersianDigits((calc.totalAmount || 0).toLocaleString())} ت
+                      {formatCurrency(calc.totalAmount || 0)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <details className="inline-block">
@@ -127,11 +127,14 @@ export default function ChargePreviewTab({
                           جزئیات محاسبه
                         </summary>
                         <div className="mt-2 p-3 bg-[var(--bg-secondary)] rounded-lg text-right">
-                          {(calc.breakdown || []).map((item, i) => (
-                            <div key={i} className="text-xs text-[var(--text-muted)] mb-1">
-                              {item}
-                            </div>
-                          ))}
+                          {(calc.breakdown || [])
+                            .slice() // copy to avoid mutating
+                            .sort()
+                            .map((item, i) => (
+                              <div key={i} className="text-xs text-[var(--text-muted)] mb-1">
+                                {item}
+                              </div>
+                            ))}
                         </div>
                       </details>
                     </td>

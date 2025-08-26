@@ -5,6 +5,7 @@ import { UnitChargeInfo, ChargeCalculation, MonthlyChargeFormData } from '@/type
 import { toPersianDigits, formatJalaliDate } from '@/lib/utils';
 import { safeToString } from '@/lib/safeUtils';
 import { format as formatJalali } from 'date-fns-jalali';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 interface ChargeSummaryTabProps {
   calculations: ChargeCalculation[];
@@ -19,9 +20,9 @@ export default function ChargeSummaryTab({
   unitsList,
   formData,
   totalAmount,
-  chargeConflicts
+  chargeConflicts,
 }: ChargeSummaryTabProps) {
-  const availableUnitsData = unitsList.filter(unit => 
+  const availableUnitsData = unitsList.filter(unit =>
     calculations.some(calc => calc.unitId === unit.id)
   );
 
@@ -74,15 +75,15 @@ export default function ChargeSummaryTab({
             <div className="flex justify-between">
               <span className="text-[var(--text-muted)]">مجموع کل مبلغ:</span>
               <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                {toPersianDigits(totalAmount.toLocaleString())} تومان
+                {formatCurrency(totalAmount)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-[var(--text-muted)]">میانگین هر واحد:</span>
               <span className="font-medium text-[var(--text-color)]">
-                {availableUnitsData.length > 0 
-                  ? toPersianDigits(Math.round(totalAmount / availableUnitsData.length).toLocaleString()) 
-                  : '۰'} تومان
+                {availableUnitsData.length > 0
+                  ? formatCurrency(Math.round(totalAmount / availableUnitsData.length))
+                  : '۰ تومان'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -108,12 +109,15 @@ export default function ChargeSummaryTab({
                   شارژ ماه {currentMonth} {currentYear} - واحد {toPersianDigits(safeToString(calc.unitNumber, ''))}
                 </div>
                 <div className="text-xs text-[var(--text-muted)] mt-1">
-                  {formData.description || (calc.breakdown || []).slice(0, 2).join(' - ')}
+                  {[formData.description, ...(calc.breakdown || [])]
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join(' • ')}
                   {(calc.breakdown || []).length > 2 && '...'}
                 </div>
               </div>
               <div className="text-sm font-bold text-green-600 dark:text-green-400">
-                {toPersianDigits((calc.totalAmount || 0).toLocaleString())} ت
+                {formatCurrency(calc.totalAmount || 0)}
               </div>
             </div>
           ))}
@@ -130,6 +134,9 @@ export default function ChargeSummaryTab({
           </div>
         </div>
       )}
+        
+      {/* دکمه‌ها از اینجا حذف شدند */}
+      
     </div>
   );
 }

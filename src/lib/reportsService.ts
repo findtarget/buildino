@@ -3,38 +3,51 @@ import { EnhancedTransaction, TransactionType, CategorySummary, MonthlyData } fr
 import { AnalyticsMetrics, ReportConfig } from '@/types/reports';
 
 export class ReportsService {
+  static generateReport(config: ReportConfig, mockEnhancedTransactions: EnhancedTransaction[]) {
+    throw new Error('Method not implemented.');
+  }
+  static generateReport(config: ReportConfig, mockEnhancedTransactions: EnhancedTransaction[]) {
+    throw new Error('Method not implemented.');
+  }
   static generateAnalytics(
     transactions: EnhancedTransaction[],
     dateRange: { from: string; to: string }
   ): AnalyticsMetrics {
     // Filter transactions by date range if needed
     const filteredTransactions = transactions; // Add date filtering here if needed
-    
+
     const totalRevenue = filteredTransactions
       .filter(t => t.type === TransactionType.Income)
       .reduce((sum, t) => sum + t.finalAmount, 0);
-      
+
     const totalExpenses = filteredTransactions
       .filter(t => t.type === TransactionType.Expense)
       .reduce((sum, t) => sum + t.finalAmount, 0);
-      
+
     const netIncome = totalRevenue - totalExpenses;
     const transactionCount = filteredTransactions.length;
     const averageTransactionAmount = transactionCount > 0 ? (totalRevenue + totalExpenses) / transactionCount : 0;
 
-    // Generate category summaries
+    // >>>>>>>>>> بخش جدید اضافه شده <<<<<<<<<<
+    const profitMargin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
+
+    // Placeholder logic for occupancy and collection rates
+    const occupiedUnitIds = new Set(filteredTransactions.map(t => t.relatedUnitId).filter(Boolean));
+    const totalUnitsInBuilding = 24; // فرض می‌کنیم ۲۴ واحد در کل وجود دارد
+    const unitOccupancyRate = totalUnitsInBuilding > 0 ? (occupiedUnitIds.size / totalUnitsInBuilding) * 100 : 0;
+    const collectionRate = 95.5; // مقدار فرضی برای نمایش
+    // >>>>>>>>>> پایان بخش جدید <<<<<<<<<<
+
     const expenseCategories = this.getCategorySummary(
       filteredTransactions.filter(t => t.type === TransactionType.Expense)
     );
-    
+
     const incomeCategories = this.getCategorySummary(
       filteredTransactions.filter(t => t.type === TransactionType.Income)
     );
 
-    // Generate monthly data
     const monthlyData = this.getMonthlyData(filteredTransactions);
 
-    // Generate unit metrics
     const unitMetrics: { [unitId: number]: any } = {};
     filteredTransactions
       .filter(t => t.relatedUnitId)
@@ -43,7 +56,7 @@ export class ReportsService {
         if (!unitMetrics[unitId]) {
           unitMetrics[unitId] = { totalCharges: 0, totalPayments: 0, balance: 0 };
         }
-        
+
         if (transaction.type === TransactionType.Income) {
           unitMetrics[unitId].totalCharges += transaction.finalAmount;
         }
@@ -59,11 +72,15 @@ export class ReportsService {
       topIncomeCategories: incomeCategories,
       monthlyData,
       monthlyGrowth: {
-        revenue: 0, // Calculate based on comparison with previous period
-        expense: 0,
-        net: 0
+        revenue: 12.5, // مقدار فرضی
+        expense: 4.2,  // مقدار فرضی
+        net: 15.1     // مقدار فرضی
       },
-      unitMetrics
+      unitMetrics,
+      // >>>>>>>>>> پراپرتی‌های جدید اضافه شده به خروجی <<<<<<<<<<
+      profitMargin,
+      unitOccupancyRate,
+      collectionRate,
     };
   }
 

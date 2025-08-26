@@ -75,20 +75,22 @@ export default function AnalyticsDashboard({
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [comparisonMode, setComparisonMode] = useState<'previous' | 'year'>('previous');
 
+  // >>>>>>>>>> بخش اصلاح شده برای جلوگیری از خطا <<<<<<<<<<
+  // با اضافه کردن مقادیر پیش‌فرض (?? 0)، از خطای toFixed روی undefined جلوگیری می‌کنیم
   const kpiCards = [
     {
       title: 'کل درآمد',
       value: formatCurrency(metrics.totalRevenue),
-      change: metrics.monthlyGrowth,
-      changeText: `${toPersianDigits(Math.abs(metrics.monthlyGrowth).toFixed(1))}%`,
+      change: metrics.monthlyGrowth?.net ?? 0,
+      changeText: `${toPersianDigits(Math.abs(metrics.monthlyGrowth?.net ?? 0).toFixed(1))}%`,
       icon: BanknotesIcon,
       color: 'emerald',
-      trend: metrics.monthlyGrowth >= 0 ? 'up' : 'down'
+      trend: (metrics.monthlyGrowth?.net ?? 0) >= 0 ? 'up' : 'down'
     },
     {
       title: 'کل هزینه‌ها',
       value: formatCurrency(metrics.totalExpenses),
-      change: -2.1,
+      change: -2.1, // Placeholder
       changeText: '۲.۱%',
       icon: ArrowTrendingDownIcon,
       color: 'rose',
@@ -97,8 +99,8 @@ export default function AnalyticsDashboard({
     {
       title: 'درآمد خالص',
       value: formatCurrency(metrics.netIncome),
-      change: metrics.profitMargin,
-      changeText: `${toPersianDigits(metrics.profitMargin.toFixed(1))}%`,
+      change: metrics.profitMargin ?? 0,
+      changeText: `${toPersianDigits((metrics.profitMargin ?? 0).toFixed(1))}%`,
       icon: ArrowTrendingUpIcon,
       color: metrics.netIncome >= 0 ? 'emerald' : 'rose',
       trend: metrics.netIncome >= 0 ? 'up' : 'down'
@@ -114,8 +116,8 @@ export default function AnalyticsDashboard({
     },
     {
       title: 'نرخ اشغال',
-      value: `${toPersianDigits(metrics.unitOccupancyRate.toFixed(1))}%`,
-      change: 2.3,
+      value: `${toPersianDigits((metrics.unitOccupancyRate ?? 0).toFixed(1))}%`,
+      change: 2.3, // Placeholder
       changeText: '۲.۳%',
       icon: ChartBarIcon,
       color: 'purple',
@@ -123,8 +125,8 @@ export default function AnalyticsDashboard({
     },
     {
       title: 'نرخ وصولی',
-      value: `${toPersianDigits(metrics.collectionRate.toFixed(1))}%`,
-      change: 1.8,
+      value: `${toPersianDigits((metrics.collectionRate ?? 0).toFixed(1))}%`,
+      change: 1.8, // Placeholder
       changeText: '۱.۸%',
       icon: CalendarDaysIcon,
       color: 'indigo',
@@ -133,12 +135,13 @@ export default function AnalyticsDashboard({
   ];
 
   // Monthly Trends Chart Data
+  // >>>>>>>>>> نام متغیر از monthlyTrends به monthlyData تغییر کرد <<<<<<<<<<
   const monthlyTrendsData = {
-    labels: metrics.monthlyTrends.map(t => t.month),
+    labels: metrics.monthlyData.map(t => t.month),
     datasets: [
       {
         label: 'درآمد',
-        data: metrics.monthlyTrends.map(t => t.income),
+        data: metrics.monthlyData.map(t => t.income),
         borderColor: 'rgb(16, 185, 129)',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: true,
@@ -146,7 +149,7 @@ export default function AnalyticsDashboard({
       },
       {
         label: 'هزینه',
-        data: metrics.monthlyTrends.map(t => t.expense),
+        data: metrics.monthlyData.map(t => t.expense),
         borderColor: 'rgb(239, 68, 68)',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         fill: true,
@@ -154,7 +157,7 @@ export default function AnalyticsDashboard({
       },
       {
         label: 'خالص',
-        data: metrics.monthlyTrends.map(t => t.net),
+        data: metrics.monthlyData.map(t => t.net),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
@@ -162,6 +165,7 @@ export default function AnalyticsDashboard({
       }
     ],
   };
+  // >>>>>>>>>> پایان بخش اصلاح شده <<<<<<<<<<
 
   // Expense Categories Chart
   const expenseCategoriesData = {
