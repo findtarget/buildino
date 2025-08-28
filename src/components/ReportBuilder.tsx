@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReportConfig, ReportFilters, ReportColumn, ChartConfig } from '@/types/reports';
 import { TransactionStatus } from '@/types/accounting';
-import { toPersianDigits, formatCurrency, dateToJalaliString } from '@/lib/utils';
+import { toPersianDigits, formatCurrency, dateToJalaliString, gregorianToJalali, toEnglishDigits, jalaliToGregorian } from '@/lib/utils';
 import CustomDatePicker from './CustomDatePicker';
 import {
   ChartBarIcon,
@@ -197,32 +197,43 @@ export default function ReportBuilder({
     }));
   };
 
-  const handlePreview = () => {
-    if (validateConfig()) {
-      // اضافه کردن نمودارها به config قبل از ارسال
-      const finalConfig = {
-        ...config,
-        charts: config.charts || [],
-        columns: availableColumns.filter(col => col.visible)
-      };
-      onPreviewReport(finalConfig as ReportConfig);
-    }
-  };
+  // تغییر در handlePreview و handleCreate برای اطمینان از انتقال نمودارها:
+const handlePreview = () => {
+  if (validateConfig()) {
+    const finalConfig = {
+      ...config,
+      charts: config.charts || [],
+      columns: availableColumns.filter(col => col.visible),
+      filters: {
+        ...config.filters,
+        status: selectedStatuses as TransactionStatus[],
+        categories: selectedCategories
+      }
+    };
+    onPreviewReport(finalConfig as ReportConfig);
+  }
+};
 
-  const handleCreate = () => {
-    if (validateConfig()) {
-      const finalConfig: ReportConfig = {
-        id: `report_${Date.now()}`,
-        createdBy: 'current-user',
-        createdAt: new Date().toISOString(),
-        ...config,
-        charts: config.charts || [],
-        columns: availableColumns.filter(col => col.visible)
-      } as ReportConfig;
 
-      onCreateReport(finalConfig);
-    }
-  };
+const handleCreate = () => {
+  if (validateConfig()) {
+    const finalConfig: ReportConfig = {
+      id: `report_${Date.now()}`,
+      createdBy: 'current-user',
+      createdAt: new Date().toISOString(),
+      ...config,
+      charts: config.charts || [],
+      columns: availableColumns.filter(col => col.visible),
+      filters: {
+        ...config.filters,
+        status: selectedStatuses as TransactionStatus[],
+        categories: selectedCategories
+      }
+    } as ReportConfig;
+
+    onCreateReport(finalConfig);
+  }
+};
 
   const validateConfig = (): boolean => {
     return !!(config.title && config.type && config.category && config.dateRange?.from && config.dateRange?.to);
@@ -306,23 +317,20 @@ export default function ReportBuilder({
           <div key={step.id} className="flex items-center">
             <button
               onClick={() => handleStepChange(step.id)}
-              className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
-                currentStep >= step.id
+              className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${currentStep >= step.id
                   ? 'bg-blue-500 text-white'
                   : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-              }`}
+                }`}
             >
               <step.icon className="w-5 h-5" />
             </button>
-            <span className={`mx-3 text-sm hidden md:block ${
-              currentStep >= step.id ? 'text-blue-600 font-medium' : 'text-gray-500'
-            }`}>
+            <span className={`mx-3 text-sm hidden md:block ${currentStep >= step.id ? 'text-blue-600 font-medium' : 'text-gray-500'
+              }`}>
               {step.title}
             </span>
             {index < steps.length - 1 && (
-              <div className={`w-8 h-0.5 mx-2 hidden md:block ${
-                currentStep > step.id ? 'bg-blue-500' : 'bg-gray-200'
-              }`} />
+              <div className={`w-8 h-0.5 mx-2 hidden md:block ${currentStep > step.id ? 'bg-blue-500' : 'bg-gray-200'
+                }`} />
             )}
           </div>
         ))}
@@ -421,13 +429,14 @@ export default function ReportBuilder({
                     از تاریخ (شمسی) <span className="text-red-500">*</span>
                   </label>
                   <CustomDatePicker
-                    value={config.dateRange?.from ? 
+                    value={config.dateRange?.from ?
                       (() => {
                         try {
                           // اگر تاریخ به فرمت شمسی است، تبدیل کن
-                          if (config.dateRange.from.includes('/') && config.dateRange.from.length === 10) {
-                            const [jy, jm, jd] = config.dateRange.from.split('/').map(Number);
-                            if (jy && jm && jd) {
+                          if (config.dateRange.from.includes('/')) {
+                            const englishDate = toEnglishDigits(config.dateRange.from);
+                            const [jy, jm, jd] = englishDate.split('/').map(Number);
+                            if (jy && jm && jd && jy >= 1300 && jy <= 1500) {
                               const [gy, gm, gd_g] = jalaliToGregorian(jy, jm, jd);
                               return new Date(gy, gm - 1, gd_g);
                             }
@@ -436,34 +445,45 @@ export default function ReportBuilder({
                         } catch {
                           return null;
                         }
-                      })() 
+                      })()
                       : null}
                     onChange={(date) => {
                       if (date) {
-                        const jalaliString = dateToJalaliString(date);
+                        const [jy, jm, jd] = gregorianToJalali(
+                          date.getFullYear(),
+                          date.getMonth() + 1,
+                          date.getDate()
+                        );
+                        const jalaliString = `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
                         handleConfigChange('dateRange', {
                           ...config.dateRange,
                           from: jalaliString
                         });
+                      } else {
+                        handleConfigChange('dateRange', {
+                          ...config.dateRange,
+                          from: ''
+                        });
                       }
                     }}
-                    placeholder="انتخاب تاریخ شروع"
+                    placeholder="مثال: ۱۴۰۳/۰۶/۱۵"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-color)] mb-3">
                     <CalendarDaysIcon className="w-4 h-4 inline ml-1" />
                     تا تاریخ (شمسی) <span className="text-red-500">*</span>
                   </label>
                   <CustomDatePicker
-                    value={config.dateRange?.to ? 
+                    value={config.dateRange?.to ?
                       (() => {
                         try {
                           // اگر تاریخ به فرمت شمسی است، تبدیل کن
-                          if (config.dateRange.to.includes('/') && config.dateRange.to.length === 10) {
-                            const [jy, jm, jd] = config.dateRange.to.split('/').map(Number);
-                            if (jy && jm && jd) {
+                          if (config.dateRange.to.includes('/')) {
+                            const englishDate = toEnglishDigits(config.dateRange.to);
+                            const [jy, jm, jd] = englishDate.split('/').map(Number);
+                            if (jy && jm && jd && jy >= 1300 && jy <= 1500) {
                               const [gy, gm, gd_g] = jalaliToGregorian(jy, jm, jd);
                               return new Date(gy, gm - 1, gd_g);
                             }
@@ -472,21 +492,32 @@ export default function ReportBuilder({
                         } catch {
                           return null;
                         }
-                      })() 
+                      })()
                       : null}
                     onChange={(date) => {
                       if (date) {
-                        const jalaliString = dateToJalaliString(date);
+                        const [jy, jm, jd] = gregorianToJalali(
+                          date.getFullYear(),
+                          date.getMonth() + 1,
+                          date.getDate()
+                        );
+                        const jalaliString = `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
                         handleConfigChange('dateRange', {
                           ...config.dateRange,
                           to: jalaliString
                         });
+                      } else {
+                        handleConfigChange('dateRange', {
+                          ...config.dateRange,
+                          to: ''
+                        });
                       }
                     }}
-                    placeholder="انتخاب تاریخ پایان"
+                    placeholder="مثال: ۱۴۰۳/۰۷/۱۵"
                   />
                 </div>
               </div>
+
             </motion.div>
           )}
 
@@ -515,7 +546,7 @@ export default function ReportBuilder({
                           onChange={(e) => handleStatusSelection(option.value, e.target.checked)}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <label 
+                        <label
                           htmlFor={`status-${option.value}`}
                           className="text-sm text-[var(--text-color)] cursor-pointer select-none"
                         >
@@ -539,7 +570,7 @@ export default function ReportBuilder({
                           onChange={(e) => handleCategorySelection(option.value, e.target.checked)}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <label 
+                        <label
                           htmlFor={`category-${option.value}`}
                           className="text-sm text-[var(--text-color)] cursor-pointer select-none"
                         >
@@ -606,7 +637,7 @@ export default function ReportBuilder({
                       onChange={() => handleColumnToggle(column.id)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <label 
+                    <label
                       htmlFor={`column-${column.id}`}
                       className="text-sm text-[var(--text-color)] cursor-pointer select-none flex-1"
                     >
@@ -634,7 +665,7 @@ export default function ReportBuilder({
                         }}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                      <label 
+                      <label
                         htmlFor={`groupby-${option.id}`}
                         className="text-sm text-[var(--text-color)] cursor-pointer select-none"
                       >
@@ -849,7 +880,7 @@ export default function ReportBuilder({
                       <div>
                         <span className="text-sm font-medium">وضعیت‌ها: </span>
                         <span className="text-sm text-[var(--text-color-muted)]">
-                          {selectedStatuses.map(status => 
+                          {selectedStatuses.map(status =>
                             statusOptions.find(opt => opt.value === status)?.label
                           ).join(', ')}
                         </span>
@@ -859,7 +890,7 @@ export default function ReportBuilder({
                       <div>
                         <span className="text-sm font-medium">دسته‌ها: </span>
                         <span className="text-sm text-[var(--text-color-muted)]">
-                          {selectedCategories.map(category => 
+                          {selectedCategories.map(category =>
                             categoryOptions.find(opt => opt.value === category)?.label
                           ).join(', ')}
                         </span>
