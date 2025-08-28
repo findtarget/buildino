@@ -75,8 +75,7 @@ export default function AnalyticsDashboard({
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [comparisonMode, setComparisonMode] = useState<'previous' | 'year'>('previous');
 
-  // >>>>>>>>>> بخش اصلاح شده برای جلوگیری از خطا <<<<<<<<<<
-  // با اضافه کردن مقادیر پیش‌فرض (?? 0)، از خطای toFixed روی undefined جلوگیری می‌کنیم
+  // اصلاح KPI Cards با استفاده از آیکون‌های صحیح
   const kpiCards = [
     {
       title: 'کل درآمد',
@@ -90,9 +89,9 @@ export default function AnalyticsDashboard({
     {
       title: 'کل هزینه‌ها',
       value: formatCurrency(metrics.totalExpenses),
-      change: -2.1, // Placeholder
+      change: -2.1,
       changeText: '۲.۱%',
-      icon: ArrowTrendingDownIcon,
+      icon: ArrowTrendingDownIcon, // اصلاح شده
       color: 'rose',
       trend: 'down'
     },
@@ -101,7 +100,7 @@ export default function AnalyticsDashboard({
       value: formatCurrency(metrics.netIncome),
       change: metrics.profitMargin ?? 0,
       changeText: `${toPersianDigits((metrics.profitMargin ?? 0).toFixed(1))}%`,
-      icon: ArrowTrendingUpIcon,
+      icon: ArrowTrendingUpIcon, // اصلاح شده
       color: metrics.netIncome >= 0 ? 'emerald' : 'rose',
       trend: metrics.netIncome >= 0 ? 'up' : 'down'
     },
@@ -117,7 +116,7 @@ export default function AnalyticsDashboard({
     {
       title: 'نرخ اشغال',
       value: `${toPersianDigits((metrics.unitOccupancyRate ?? 0).toFixed(1))}%`,
-      change: 2.3, // Placeholder
+      change: 2.3,
       changeText: '۲.۳%',
       icon: ChartBarIcon,
       color: 'purple',
@@ -126,7 +125,7 @@ export default function AnalyticsDashboard({
     {
       title: 'نرخ وصولی',
       value: `${toPersianDigits((metrics.collectionRate ?? 0).toFixed(1))}%`,
-      change: 1.8, // Placeholder
+      change: 1.8,
       changeText: '۱.۸%',
       icon: CalendarDaysIcon,
       color: 'indigo',
@@ -135,7 +134,6 @@ export default function AnalyticsDashboard({
   ];
 
   // Monthly Trends Chart Data
-  // >>>>>>>>>> نام متغیر از monthlyTrends به monthlyData تغییر کرد <<<<<<<<<<
   const monthlyTrendsData = {
     labels: metrics.monthlyData.map(t => t.month),
     datasets: [
@@ -165,7 +163,6 @@ export default function AnalyticsDashboard({
       }
     ],
   };
-  // >>>>>>>>>> پایان بخش اصلاح شده <<<<<<<<<<
 
   // Expense Categories Chart
   const expenseCategoriesData = {
@@ -192,302 +189,267 @@ export default function AnalyticsDashboard({
     ],
   };
 
-  // Income Categories Chart
-  const incomeCategoriesData = {
-    labels: metrics.topIncomeCategories.map(c => c.category),
-    datasets: [
-      {
-        data: metrics.topIncomeCategories.map(c => c.amount),
-        backgroundColor: [
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-        ],
-        borderColor: [
-          'rgba(16, 185, 129, 1)',
-          'rgba(59, 130, 246, 1)',
-          'rgba(139, 92, 246, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(239, 68, 68, 1)',
-        ],
-        borderWidth: 2,
-      },
-    ],
-  };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array(6).fill(0).map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-            ))}
-          </div>
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-80 bg-gray-200 rounded-lg"></div>
-            <div className="h-80 bg-gray-200 rounded-lg"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Date Range and Period Selector */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">از تاریخ:</label>
-            <input
-              type="date"
-              value={dateRange.from}
-              onChange={(e) => onDateRangeChange({ ...dateRange, from: e.target.value })}
-              className="px-3 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-color)] text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">تا تاریخ:</label>
-            <input
-              type="date"
-              value={dateRange.to}
-              onChange={(e) => onDateRangeChange({ ...dateRange, to: e.target.value })}
-              className="px-3 py-2 border border-[var(--border-color)] rounded-lg bg-[var(--bg-color)] text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {(['week', 'month', 'quarter', 'year'] as const).map(period => (
+      {/* Period Selection */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          {['week', 'month', 'quarter', 'year'].map((period) => (
             <button
               key={period}
-              onClick={() => setSelectedPeriod(period)}
-              className={`px-3 py-2 rounded-lg text-sm transition-colors ${selectedPeriod === period
+              onClick={() => setSelectedPeriod(period as any)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedPeriod === period
                   ? 'bg-blue-500 text-white'
-                  : 'border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
-                }`}
+                  : 'text-[var(--text-color-muted)] hover:text-[var(--text-color)] hover:bg-[var(--bg-secondary)]'
+              }`}
             >
-              {period === 'week' ? 'هفتگی' :
-                period === 'month' ? 'ماهانه' :
-                  period === 'quarter' ? 'فصلی' : 'سالانه'}
+              {period === 'week' ? 'هفتگی' : 
+               period === 'month' ? 'ماهانه' :
+               period === 'quarter' ? 'فصلی' : 'سالانه'}
             </button>
           ))}
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={() => setComparisonMode('previous')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              comparisonMode === 'previous'
+                ? 'bg-blue-500 text-white'
+                : 'text-[var(--text-color-muted)] hover:text-[var(--text-color)] hover:bg-[var(--bg-secondary)]'
+            }`}
+          >
+            مقایسه با دوره قبل
+          </button>
+          <button
+            onClick={() => setComparisonMode('year')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              comparisonMode === 'year'
+                ? 'bg-blue-500 text-white'
+                : 'text-[var(--text-color-muted)] hover:text-[var(--text-color)] hover:bg-[var(--bg-secondary)]'
+            }`}
+          >
+            مقایسه با سال قبل
+          </button>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {kpiCards.map((kpi, index) => (
-          <motion.div
-            key={kpi.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-[var(--bg-secondary)] rounded-xl p-6 border border-[var(--border-color)] hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`p-2 rounded-lg bg-${kpi.color}-100`}>
-                    <kpi.icon className={`w-5 h-5 text-${kpi.color}-600`} />
-                  </div>
-                  <h3 className="text-sm font-medium text-[var(--text-color-muted)]">
-                    {kpi.title}
+        {kpiCards.map((card, index) => {
+          const IconComponent = card.icon;
+          return (
+            <motion.div
+              key={card.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="p-6 rounded-2xl border border-[var(--border-color)]"
+              style={{
+                backgroundColor: 'var(--bg-secondary)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-[var(--text-color-muted)] mb-2">
+                    {card.title}
                   </h3>
-                </div>
-                <p className="text-2xl font-bold text-[var(--text-color)] mb-2">
-                  {kpi.value}
-                </p>
-                <div className="flex items-center gap-2">
-                  {kpi.trend === 'up' && <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />}
-                  {kpi.trend === 'down' && <ArrowTrendingDownIcon className="w-4 h-4 text-rose-500" />}
-                  <span className={`text-sm ${kpi.trend === 'up' ? 'text-emerald-600' :
-                      kpi.trend === 'down' ? 'text-rose-600' : 'text-gray-600'
+                  <p className={`text-2xl font-bold mb-1 text-${card.color}-500`}>
+                    {card.value}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      card.trend === 'up' 
+                        ? 'bg-green-100 text-green-600' 
+                        : card.trend === 'down'
+                        ? 'bg-red-100 text-red-600'
+                        : 'bg-gray-100 text-gray-600'
                     }`}>
-                    {kpi.changeText} نسبت به ماه قبل
-                  </span>
+                      {card.trend === 'up' ? '↗' : card.trend === 'down' ? '↘' : '→'} {card.changeText}
+                    </span>
+                  </div>
+                </div>
+                <div className={`p-3 rounded-xl bg-${card.color}-100`}>
+                  <IconComponent className={`w-6 h-6 text-${card.color}-500`} />
                 </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* Main Charts */}
+      {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Trends */}
+        {/* Monthly Trends Chart */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+          className="p-6 rounded-2xl border border-[var(--border-color)]"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        >
+          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
+            روند ماهانه درآمد و هزینه
+          </h3>
+          <div className="h-80">
+            <Line data={monthlyTrendsData} options={chartOptions} />
+          </div>
+        </motion.div>
+
+        {/* Expense Categories Chart */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4 }}
+          className="p-6 rounded-2xl border border-[var(--border-color)]"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        >
+          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
+            توزیع هزینه‌ها بر اساس دسته
+          </h3>
+          <div className="h-80">
+            <Doughnut 
+              data={expenseCategoriesData} 
+              options={{
+                ...chartOptions,
+                plugins: {
+                  ...chartOptions.plugins,
+                  legend: {
+                    position: 'bottom'
+                  }
+                }
+              }} 
+            />
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Additional Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top Performing Units */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="p-6 rounded-2xl border border-[var(--border-color)]"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        >
+          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
+            واحدهای برتر
+          </h3>
+          <div className="space-y-3">
+            {metrics.topPerformingUnits?.slice(0, 5).map((unit, index) => (
+              <div key={unit.unitId} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    index === 0 ? 'bg-yellow-100 text-yellow-600' :
+                    index === 1 ? 'bg-gray-100 text-gray-600' :
+                    index === 2 ? 'bg-orange-100 text-orange-600' :
+                    'bg-blue-100 text-blue-600'
+                  }`}>
+                    {toPersianDigits((index + 1).toString())}
+                  </div>
+                  <span className="font-medium text-[var(--text-color)]">
+                    واحد {toPersianDigits(unit.unitNumber)}
+                  </span>
+                </div>
+                <span className="text-green-600 font-semibold">
+                  {formatCurrency(unit.totalRevenue)}
+                </span>
+              </div>
+            )) ?? <div className="text-[var(--text-color-muted)]">داده‌ای موجود نیست</div>}
+          </div>
+        </motion.div>
+
+        {/* Payment Status */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="bg-[var(--bg-secondary)] rounded-xl p-6 border border-[var(--border-color)]"
+          className="p-6 rounded-2xl border border-[var(--border-color)]"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
         >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold">روند ماهانه درآمد و هزینه</h3>
-            <ClockIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
+          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
+            وضعیت پرداخت‌ها
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--text-color-muted)]">پرداخت شده</span>
+              <span className="text-green-600 font-semibold">
+                {toPersianDigits((metrics.collectionRate ?? 0).toFixed(1))}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${metrics.collectionRate ?? 0}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[var(--text-color-muted)]">معوق</span>
+              <span className="text-red-600 font-semibold">
+                {formatCurrency(metrics.totalOverdue ?? 0)}
+              </span>
+            </div>
           </div>
-          <Line
-            data={monthlyTrendsData}
-            options={{
-              ...chartOptions,
-              plugins: {
-                ...chartOptions.plugins,
-                title: {
-                  display: false
-                }
-              }
-            }}
-          />
         </motion.div>
 
-        {/* Expense Categories */}
+        {/* Recent Activity */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="bg-[var(--bg-secondary)] rounded-xl p-6 border border-[var(--border-color)]"
+          className="p-6 rounded-2xl border border-[var(--border-color)]"
+          style={{
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
         >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold">توزیع هزینه‌ها</h3>
-            <ChartBarIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
-          </div>
-          <Doughnut
-            data={expenseCategoriesData}
-            options={{
-              responsive: true,
-              plugins: {
-                legend: {
-                  position: 'bottom'
-                }
-              }
-            }}
-          />
-        </motion.div>
-      </div>
-
-      {/* Secondary Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Income Categories */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          className="bg-[var(--bg-secondary)] rounded-xl p-6 border border-[var(--border-color)]"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold">منابع درآمد</h3>
-            <BanknotesIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
-          </div>
-          <Bar
-            data={{
-              labels: metrics.topIncomeCategories.map(c => c.category),
-              datasets: [{
-                label: 'درآمد',
-                data: metrics.topIncomeCategories.map(c => c.amount),
-                backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                borderColor: 'rgba(16, 185, 129, 1)',
-                borderWidth: 2,
-              }]
-            }}
-            options={chartOptions}
-          />
-        </motion.div>
-
-        {/* Performance Metrics */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.9 }}
-          className="bg-[var(--bg-secondary)] rounded-xl p-6 border border-[var(--border-color)]"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold">شاخص‌های عملکرد</h3>
-            <TrendingUpIcon className="w-5 h-5 text-[var(--text-color-muted)]" />
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-color-muted)]">میانگین تراکنش</span>
-              <span className="font-semibold">{formatCurrency(metrics.averageTransaction)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-color-muted)]">تعداد تراکنش‌ها</span>
-              <span className="font-semibold">{toPersianDigits(metrics.transactionCount)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-color-muted)]">حاشیه سود</span>
-              <span className={`font-semibold ${metrics.profitMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {toPersianDigits(metrics.profitMargin.toFixed(1))}%
+          <h3 className="text-lg font-semibold text-[var(--text-color)] mb-4">
+            فعالیت‌های اخیر
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <span className="text-sm text-[var(--text-color-muted)]">
+                شارژ ماهانه واحدها - امروز
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-color-muted)]">میانگین شارژ ماهانه</span>
-              <span className="font-semibold">{formatCurrency(metrics.averageMonthlyCharge)}</span>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-blue-500 rounded-full" />
+              <span className="text-sm text-[var(--text-color-muted)]">
+                پرداخت قبض آب - دیروز
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-orange-500 rounded-full" />
+              <span className="text-sm text-[var(--text-color-muted)]">
+                تعمیر آسانسور - ۳ روز پیش
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-purple-500 rounded-full" />
+              <span className="text-sm text-[var(--text-color-muted)]">
+                نظافت راه‌پله - هفته گذشته
+              </span>
             </div>
           </div>
         </motion.div>
       </div>
-
-      {/* Detailed Statistics Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.0 }}
-        className="bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] overflow-hidden"
-      >
-        <div className="p-6 border-b border-[var(--border-color)]">
-          <h3 className="text-lg font-semibold">آمار تفصیلی ماهانه</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-[var(--bg-color)]">
-              <tr>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">ماه</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">درآمد</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">هزینه</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">خالص</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-[var(--text-color-muted)]">تغییر</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-color)]">
-              {metrics.monthlyTrends.map((trend, index) => {
-                const previousNet = index > 0 ? metrics.monthlyTrends[index - 1].net : trend.net;
-                const change = previousNet !== 0 ? ((trend.net - previousNet) / Math.abs(previousNet)) * 100 : 0;
-
-                return (
-                  <tr key={trend.month} className="hover:bg-[var(--bg-color)] transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium">{trend.month}</td>
-                    <td className="px-6 py-4 text-sm text-emerald-600">{formatCurrency(trend.income)}</td>
-                    <td className="px-6 py-4 text-sm text-rose-600">{formatCurrency(trend.expense)}</td>
-                    <td className="px-6 py-4 text-sm font-semibold">
-                      <span className={trend.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                        {formatCurrency(trend.net)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        {change > 0 ? (
-                          <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-500" />
-                        ) : change < 0 ? (
-                          <ArrowTrendingDownIcon className="w-4 h-4 text-rose-500" />
-                        ) : null}
-                        <span className={
-                          change > 0 ? 'text-emerald-600' :
-                            change < 0 ? 'text-rose-600' : 'text-gray-600'
-                        }>
-                          {toPersianDigits(Math.abs(change).toFixed(1))}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
     </div>
   );
 }

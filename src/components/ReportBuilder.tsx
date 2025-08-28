@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReportConfig, ReportFilters, ReportColumn, ChartConfig } from '@/types/reports';
 import { TransactionStatus } from '@/types/accounting';
-import { toPersianDigits, formatCurrency } from '@/lib/utils';
+import { toPersianDigits, formatCurrency, dateToJalaliString } from '@/lib/utils';
+import CustomDatePicker from './CustomDatePicker';
 import {
   ChartBarIcon,
   TableCellsIcon,
@@ -69,11 +70,30 @@ const chartTypes = [
   { id: 'area', title: 'مساحت', icon: ChartBarIcon }
 ];
 
-export default function ReportBuilder({ 
-  onCreateReport, 
-  onPreviewReport, 
-  templates, 
-  loading = false 
+const statusOptions = [
+  { value: TransactionStatus.Posted, label: 'ثبت شده' },
+  { value: TransactionStatus.Approved, label: 'تایید شده' },
+  { value: TransactionStatus.Pending, label: 'در انتظار' }
+];
+
+const categoryOptions = [
+  { value: 'monthly-charge', label: 'شارژ ماهانه' },
+  { value: 'utilities', label: 'قبوض و خدمات' },
+  { value: 'maintenance', label: 'نگهداری و تعمیرات' },
+  { value: 'supplies', label: 'لوازم و تجهیزات' },
+  { value: 'security', label: 'نگهبانی و امنیت' },
+  { value: 'insurance', label: 'بیمه' },
+  { value: 'loan', label: 'وام و تسهیلات' },
+  { value: 'penalty', label: 'جریمه' },
+  { value: 'parking-charge', label: 'شارژ پارکینگ' },
+  { value: 'elevator-charge', label: 'شارژ آسانسور' }
+];
+
+export default function ReportBuilder({
+  onCreateReport,
+  onPreviewReport,
+  templates,
+  loading = false
 }: ReportBuilderProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [config, setConfig] = useState<Partial<ReportConfig>>({
@@ -104,6 +124,9 @@ export default function ReportBuilder({
     { id: 'status', title: 'وضعیت', field: 'status', type: 'text', visible: true }
   ]);
 
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
   useEffect(() => {
     // Update available columns based on report type and category
     if (config.type && config.category) {
@@ -113,9 +136,9 @@ export default function ReportBuilder({
 
   const updateColumnsForCategory = () => {
     let newColumns = [...availableColumns];
-    
+
     if (config.category === 'balance-sheet') {
-      newColumns = newColumns.map(col => 
+      newColumns = newColumns.map(col =>
         col.id === 'amount' ? { ...col, title: 'مانده' } : col
       );
     } else if (config.category === 'cash-flow') {
@@ -124,7 +147,7 @@ export default function ReportBuilder({
         { id: 'cashOut', title: 'خروجی نقد', field: 'cashOut', type: 'currency', visible: true, aggregation: 'sum' }
       );
     }
-    
+
     setAvailableColumns(newColumns);
   };
 
@@ -160,7 +183,7 @@ export default function ReportBuilder({
       yField: 'finalAmount',
       position: 'top'
     };
-    
+
     setConfig(prev => ({
       ...prev,
       charts: [...(prev.charts || []), newChart]
@@ -176,7 +199,13 @@ export default function ReportBuilder({
 
   const handlePreview = () => {
     if (validateConfig()) {
-      onPreviewReport(config as ReportConfig);
+      // اضافه کردن نمودارها به config قبل از ارسال
+      const finalConfig = {
+        ...config,
+        charts: config.charts || [],
+        columns: availableColumns.filter(col => col.visible)
+      };
+      onPreviewReport(finalConfig as ReportConfig);
     }
   };
 
@@ -186,9 +215,11 @@ export default function ReportBuilder({
         id: `report_${Date.now()}`,
         createdBy: 'current-user',
         createdAt: new Date().toISOString(),
-        ...config
+        ...config,
+        charts: config.charts || [],
+        columns: availableColumns.filter(col => col.visible)
       } as ReportConfig;
-      
+
       onCreateReport(finalConfig);
     }
   };
@@ -205,6 +236,28 @@ export default function ReportBuilder({
       isTemplate: false
     });
     setCurrentStep(1);
+  };
+
+  const handleStatusSelection = (statusValue: string, checked: boolean) => {
+    let updatedStatuses;
+    if (checked) {
+      updatedStatuses = [...selectedStatuses, statusValue];
+    } else {
+      updatedStatuses = selectedStatuses.filter(s => s !== statusValue);
+    }
+    setSelectedStatuses(updatedStatuses);
+    handleFiltersChange({ status: updatedStatuses as TransactionStatus[] });
+  };
+
+  const handleCategorySelection = (categoryValue: string, checked: boolean) => {
+    let updatedCategories;
+    if (checked) {
+      updatedCategories = [...selectedCategories, categoryValue];
+    } else {
+      updatedCategories = selectedCategories.filter(c => c !== categoryValue);
+    }
+    setSelectedCategories(updatedCategories);
+    handleFiltersChange({ categories: updatedCategories });
   };
 
   const steps = [
@@ -285,13 +338,15 @@ export default function ReportBuilder({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
+              className="space-y-6"
             >
               <h3 className="text-lg font-semibold mb-4">تنظیمات کلی گزارش</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">عنوان گزارش *</label>
+                  <label className="block text-sm font-medium mb-2">
+                    عنوان گزارش <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={config.title || ''}
@@ -300,9 +355,11 @@ export default function ReportBuilder({
                     className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium mb-2">نوع گزارش *</label>
+                  <label className="block text-sm font-medium mb-2">
+                    نوع گزارش <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={config.type || ''}
                     onChange={(e) => handleConfigChange('type', e.target.value)}
@@ -328,7 +385,9 @@ export default function ReportBuilder({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">دسته‌بندی *</label>
+                  <label className="block text-sm font-medium mb-2">
+                    دسته‌بندی <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={config.category || ''}
                     onChange={(e) => handleConfigChange('category', e.target.value)}
@@ -339,7 +398,7 @@ export default function ReportBuilder({
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-2">دوره‌بندی</label>
                   <select
@@ -354,30 +413,77 @@ export default function ReportBuilder({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Date Range Selection - با تقویم شمسی */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2">از تاریخ *</label>
-                  <input
-                    type="date"
-                    value={config.dateRange?.from || ''}
-                    onChange={(e) => handleConfigChange('dateRange', {
-                      ...config.dateRange,
-                      from: e.target.value
-                    })}
-                    className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
+                  <label className="block text-sm font-medium text-[var(--text-color)] mb-3">
+                    <CalendarDaysIcon className="w-4 h-4 inline ml-1" />
+                    از تاریخ (شمسی) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomDatePicker
+                    value={config.dateRange?.from ? 
+                      (() => {
+                        try {
+                          // اگر تاریخ به فرمت شمسی است، تبدیل کن
+                          if (config.dateRange.from.includes('/') && config.dateRange.from.length === 10) {
+                            const [jy, jm, jd] = config.dateRange.from.split('/').map(Number);
+                            if (jy && jm && jd) {
+                              const [gy, gm, gd_g] = jalaliToGregorian(jy, jm, jd);
+                              return new Date(gy, gm - 1, gd_g);
+                            }
+                          }
+                          return new Date(config.dateRange.from);
+                        } catch {
+                          return null;
+                        }
+                      })() 
+                      : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const jalaliString = dateToJalaliString(date);
+                        handleConfigChange('dateRange', {
+                          ...config.dateRange,
+                          from: jalaliString
+                        });
+                      }
+                    }}
+                    placeholder="انتخاب تاریخ شروع"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-2">تا تاریخ *</label>
-                  <input
-                    type="date"
-                    value={config.dateRange?.to || ''}
-                    onChange={(e) => handleConfigChange('dateRange', {
-                      ...config.dateRange,
-                      to: e.target.value
-                    })}
-                    className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
+                  <label className="block text-sm font-medium text-[var(--text-color)] mb-3">
+                    <CalendarDaysIcon className="w-4 h-4 inline ml-1" />
+                    تا تاریخ (شمسی) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomDatePicker
+                    value={config.dateRange?.to ? 
+                      (() => {
+                        try {
+                          // اگر تاریخ به فرمت شمسی است، تبدیل کن
+                          if (config.dateRange.to.includes('/') && config.dateRange.to.length === 10) {
+                            const [jy, jm, jd] = config.dateRange.to.split('/').map(Number);
+                            if (jy && jm && jd) {
+                              const [gy, gm, gd_g] = jalaliToGregorian(jy, jm, jd);
+                              return new Date(gy, gm - 1, gd_g);
+                            }
+                          }
+                          return new Date(config.dateRange.to);
+                        } catch {
+                          return null;
+                        }
+                      })() 
+                      : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const jalaliString = dateToJalaliString(date);
+                        handleConfigChange('dateRange', {
+                          ...config.dateRange,
+                          to: jalaliString
+                        });
+                      }
+                    }}
+                    placeholder="انتخاب تاریخ پایان"
                   />
                 </div>
               </div>
@@ -391,42 +497,57 @@ export default function ReportBuilder({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
+              className="space-y-6"
             >
               <h3 className="text-lg font-semibold mb-4">فیلترهای گزارش</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* وضعیت تراکنش‌ها */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">وضعیت تراکنش‌ها</label>
-                  <select
-                    multiple
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      handleFiltersChange({ status: values as TransactionStatus[] });
-                    }}
-                    className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
-                  >
-                    <option value={TransactionStatus.Posted}>ثبت شده</option>
-                    <option value={TransactionStatus.Approved}>تایید شده</option>
-                    <option value={TransactionStatus.Pending}>در انتظار</option>
-                  </select>
+                  <label className="block text-sm font-medium mb-3">وضعیت تراکنش‌ها</label>
+                  <div className="space-y-3 p-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-color)]">
+                    {statusOptions.map(option => (
+                      <div key={option.value} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id={`status-${option.value}`}
+                          checked={selectedStatuses.includes(option.value)}
+                          onChange={(e) => handleStatusSelection(option.value, e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label 
+                          htmlFor={`status-${option.value}`}
+                          className="text-sm text-[var(--text-color)] cursor-pointer select-none"
+                        >
+                          {option.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                
+
+                {/* دسته‌های مورد نظر */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">دسته‌های مورد نظر</label>
-                  <select
-                    multiple
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      handleFiltersChange({ categories: values });
-                    }}
-                    className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
-                  >
-                    <option value="Repairs">تعمیرات</option>
-                    <option value="Utilities">مشاعات</option>
-                    <option value="MonthlyCharge">شارژ ماهانه</option>
-                    <option value="Cleaning">نظافت</option>
-                  </select>
+                  <label className="block text-sm font-medium mb-3">دسته‌های مورد نظر</label>
+                  <div className="space-y-3 p-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-color)]">
+                    {categoryOptions.map(option => (
+                      <div key={option.value} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id={`category-${option.value}`}
+                          checked={selectedCategories.includes(option.value)}
+                          onChange={(e) => handleCategorySelection(option.value, e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label 
+                          htmlFor={`category-${option.value}`}
+                          className="text-sm text-[var(--text-color)] cursor-pointer select-none"
+                        >
+                          {option.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -445,7 +566,7 @@ export default function ReportBuilder({
                     className="w-full p-3 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)]"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium mb-2">حداکثر مبلغ</label>
                   <input
@@ -461,30 +582,6 @@ export default function ReportBuilder({
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">گروه‌بندی بر اساس</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {groupByOptions.map(option => (
-                    <label key={option.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={config.groupBy?.includes(option.id) || false}
-                        onChange={(e) => {
-                          const currentGroupBy = config.groupBy || [];
-                          if (e.target.checked) {
-                            handleConfigChange('groupBy', [...currentGroupBy, option.id]);
-                          } else {
-                            handleConfigChange('groupBy', currentGroupBy.filter(g => g !== option.id));
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      {option.title}
-                    </label>
-                  ))}
-                </div>
-              </div>
             </motion.div>
           )}
 
@@ -495,34 +592,57 @@ export default function ReportBuilder({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
+              className="space-y-6"
             >
               <h3 className="text-lg font-semibold mb-4">انتخاب ستون‌ها</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {availableColumns.map(column => (
-                  <div 
-                    key={column.id}
-                    className="flex items-center justify-between p-3 border border-[var(--border-color)] rounded-lg"
-                  >
-                    <label className="flex items-center flex-1">
-                      <input
-                        type="checkbox"
-                        checked={column.visible}
-                        onChange={() => handleColumnToggle(column.id)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <span className="font-medium">{column.title}</span>
-                        <div className="text-xs text-[var(--text-color-muted)]">
-                          {column.type === 'currency' && column.aggregation && (
-                            <span>جمع‌آوری: {column.aggregation}</span>
-                          )}
-                        </div>
-                      </div>
+                  <div key={column.id} className="flex items-center gap-3 p-3 border border-[var(--border-color)] rounded-lg">
+                    <input
+                      type="checkbox"
+                      id={`column-${column.id}`}
+                      checked={column.visible}
+                      onChange={() => handleColumnToggle(column.id)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label 
+                      htmlFor={`column-${column.id}`}
+                      className="text-sm text-[var(--text-color)] cursor-pointer select-none flex-1"
+                    >
+                      {column.title}
                     </label>
                   </div>
                 ))}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">گروه‌بندی بر اساس</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {groupByOptions.map(option => (
+                    <div key={option.id} className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id={`groupby-${option.id}`}
+                        checked={config.groupBy?.includes(option.id) || false}
+                        onChange={(e) => {
+                          const currentGroupBy = config.groupBy || [];
+                          const newGroupBy = e.target.checked
+                            ? [...currentGroupBy, option.id]
+                            : currentGroupBy.filter(g => g !== option.id);
+                          handleConfigChange('groupBy', newGroupBy);
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label 
+                        htmlFor={`groupby-${option.id}`}
+                        className="text-sm text-[var(--text-color)] cursor-pointer select-none"
+                      >
+                        {option.title}
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
             </motion.div>
           )}
@@ -534,10 +654,10 @@ export default function ReportBuilder({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-4"
+              className="space-y-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">نمودارهای گزارش</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">نمودارها</h3>
                 <button
                   onClick={addChart}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -546,35 +666,28 @@ export default function ReportBuilder({
                   افزودن نمودار
                 </button>
               </div>
-              
-              {config.charts?.length === 0 && (
-                <div className="text-center py-8 text-[var(--text-color-muted)]">
-                  <ChartBarIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p>هنوز نموداری اضافه نشده است</p>
-                </div>
-              )}
 
               <div className="space-y-4">
-                {config.charts?.map((chart, index) => (
-                  <div key={chart.id} className="p-4 border border-[var(--border-color)] rounded-lg">
+                {(config.charts || []).map((chart, index) => (
+                  <div key={chart.id} className="p-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-color)]">
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium">نمودار {toPersianDigits(index + 1)}</h4>
+                      <h4 className="font-medium">نمودار {toPersianDigits((index + 1).toString())}</h4>
                       <button
                         onClick={() => removeChart(chart.id)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-red-500 hover:text-red-700 p-1"
                       >
                         <XMarkIcon className="w-4 h-4" />
                       </button>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">عنوان نمودار</label>
                         <input
                           type="text"
                           value={chart.title}
                           onChange={(e) => {
-                            const updatedCharts = config.charts?.map(c => 
+                            const updatedCharts = config.charts?.map(c =>
                               c.id === chart.id ? { ...c, title: e.target.value } : c
                             );
                             handleConfigChange('charts', updatedCharts);
@@ -582,13 +695,13 @@ export default function ReportBuilder({
                           className="w-full p-2 rounded bg-[var(--bg-color)] border border-[var(--border-color)]"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium mb-2">نوع نمودار</label>
                         <select
                           value={chart.type}
                           onChange={(e) => {
-                            const updatedCharts = config.charts?.map(c => 
+                            const updatedCharts = config.charts?.map(c =>
                               c.id === chart.id ? { ...c, type: e.target.value as any } : c
                             );
                             handleConfigChange('charts', updatedCharts);
@@ -600,29 +713,72 @@ export default function ReportBuilder({
                           ))}
                         </select>
                       </div>
-                      
+
                       <div>
-                        <label className="block text-sm font-medium mb-2">موقعیت</label>
+                        <label className="block text-sm font-medium mb-2">محور X</label>
                         <select
-                          value={chart.position}
+                          value={chart.xField}
                           onChange={(e) => {
-                            const updatedCharts = config.charts?.map(c => 
-                              c.id === chart.id ? { ...c, position: e.target.value as any } : c
+                            const updatedCharts = config.charts?.map(c =>
+                              c.id === chart.id ? { ...c, xField: e.target.value } : c
                             );
                             handleConfigChange('charts', updatedCharts);
                           }}
                           className="w-full p-2 rounded bg-[var(--bg-color)] border border-[var(--border-color)]"
                         >
-                          <option value="top">بالای جدول</option>
-                          <option value="bottom">پایین جدول</option>
-                          <option value="left">سمت چپ</option>
-                          <option value="right">سمت راست</option>
+                          <option value="date">تاریخ</option>
+                          <option value="category">دسته‌بندی</option>
+                          <option value="month">ماه</option>
                         </select>
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">محور Y</label>
+                        <select
+                          value={chart.yField}
+                          onChange={(e) => {
+                            const updatedCharts = config.charts?.map(c =>
+                              c.id === chart.id ? { ...c, yField: e.target.value } : c
+                            );
+                            handleConfigChange('charts', updatedCharts);
+                          }}
+                          className="w-full p-2 rounded bg-[var(--bg-color)] border border-[var(--border-color)]"
+                        >
+                          <option value="finalAmount">مبلغ</option>
+                          <option value="count">تعداد</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-2">موقعیت</label>
+                      <select
+                        value={chart.position}
+                        onChange={(e) => {
+                          const updatedCharts = config.charts?.map(c =>
+                            c.id === chart.id ? { ...c, position: e.target.value as any } : c
+                          );
+                          handleConfigChange('charts', updatedCharts);
+                        }}
+                        className="w-full p-2 rounded bg-[var(--bg-color)] border border-[var(--border-color)]"
+                      >
+                        <option value="top">بالای جدول</option>
+                        <option value="bottom">پایین جدول</option>
+                        <option value="left">سمت چپ</option>
+                        <option value="right">سمت راست</option>
+                      </select>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {(!config.charts || config.charts.length === 0) && (
+                <div className="text-center py-12 text-[var(--text-color-muted)]">
+                  <ChartBarIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>هنوز نموداری اضافه نشده است</p>
+                  <p className="text-sm mt-1">برای افزودن نمودار از دکمه "افزودن نمودار" استفاده کنید</p>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -636,7 +792,7 @@ export default function ReportBuilder({
               className="space-y-6"
             >
               <h3 className="text-lg font-semibold mb-4">بررسی و تایید نهایی</h3>
-              
+
               <div className="bg-[var(--bg-color)] rounded-lg p-6 border border-[var(--border-color)]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -655,19 +811,22 @@ export default function ReportBuilder({
                     <span className="font-medium">دوره‌بندی:</span>
                     <span className="mr-2">{frequencies[config.frequency as keyof typeof frequencies]}</span>
                   </div>
-                  <div>
-                    <span className="font-medium">بازه زمانی:</span>
-                    <span className="mr-2">{config.dateRange?.from} الی {config.dateRange?.to}</span>
+                  <div className="md:col-span-2">
+                    <span className="font-medium">بازه زمانی (شمسی):</span>
+                    <span className="mr-2">
+                      {config.dateRange?.from && toPersianDigits(config.dateRange.from)} الی{' '}
+                      {config.dateRange?.to && toPersianDigits(config.dateRange.to)}
+                    </span>
                   </div>
                   <div>
                     <span className="font-medium">تعداد ستون‌ها:</span>
-                    <span className="mr-2">{toPersianDigits(availableColumns.filter(col => col.visible).length)}</span>
+                    <span className="mr-2">{toPersianDigits(availableColumns.filter(col => col.visible).length.toString())}</span>
                   </div>
                   <div>
                     <span className="font-medium">تعداد نمودارها:</span>
-                    <span className="mr-2">{toPersianDigits(config.charts?.length || 0)}</span>
+                    <span className="mr-2">{toPersianDigits((config.charts?.length || 0).toString())}</span>
                   </div>
-                  <div>
+                  <div className="md:col-span-2">
                     <span className="font-medium">فرمت‌های خروجی:</span>
                     <span className="mr-2">{config.exportFormats?.join(', ')}</span>
                   </div>
@@ -678,6 +837,52 @@ export default function ReportBuilder({
                 <div className="bg-[var(--bg-color)] rounded-lg p-4 border border-[var(--border-color)]">
                   <span className="font-medium">توضیحات:</span>
                   <p className="mt-2 text-[var(--text-color-muted)]">{config.description}</p>
+                </div>
+              )}
+
+              {/* نمایش فیلترهای انتخابی */}
+              {(selectedStatuses.length > 0 || selectedCategories.length > 0) && (
+                <div className="bg-[var(--bg-color)] rounded-lg p-4 border border-[var(--border-color)]">
+                  <span className="font-medium">فیلترهای اعمال شده:</span>
+                  <div className="mt-2 space-y-2">
+                    {selectedStatuses.length > 0 && (
+                      <div>
+                        <span className="text-sm font-medium">وضعیت‌ها: </span>
+                        <span className="text-sm text-[var(--text-color-muted)]">
+                          {selectedStatuses.map(status => 
+                            statusOptions.find(opt => opt.value === status)?.label
+                          ).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {selectedCategories.length > 0 && (
+                      <div>
+                        <span className="text-sm font-medium">دسته‌ها: </span>
+                        <span className="text-sm text-[var(--text-color-muted)]">
+                          {selectedCategories.map(category => 
+                            categoryOptions.find(opt => opt.value === category)?.label
+                          ).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* نمایش نمودارهای انتخابی */}
+              {config.charts && config.charts.length > 0 && (
+                <div className="bg-[var(--bg-color)] rounded-lg p-4 border border-[var(--border-color)]">
+                  <span className="font-medium">نمودارهای انتخابی:</span>
+                  <div className="mt-2 space-y-2">
+                    {config.charts.map((chart, index) => (
+                      <div key={chart.id} className="text-sm">
+                        <span className="font-medium">{toPersianDigits((index + 1).toString())}. {chart.title}</span>
+                        <span className="text-[var(--text-color-muted)] mr-2">
+                          (نوع: {chartTypes.find(t => t.id === chart.type)?.title})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -696,7 +901,7 @@ export default function ReportBuilder({
               </button>
             )}
           </div>
-          
+
           <div className="flex gap-3">
             {currentStep < 5 ? (
               <button

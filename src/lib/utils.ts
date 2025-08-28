@@ -157,3 +157,42 @@ export function formatCurrency(amount: number): string {
   const formatted = new Intl.NumberFormat('fa-IR').format(amount);
   return `${toPersianDigits(formatted)} تومان`;
 }
+
+// src/lib/utils.ts - اضافه کردن به انتهای فایل:
+
+// تبدیل تاریخ شمسی string به Date object
+export const jalaliStringToDate = (jalaliDateString: string): Date => {
+  const [year, month, day] = jalaliDateString.split('/').map(Number);
+  const [gy, gm, gd] = jalaliToGregorian(year, month, day);
+  return new Date(gy, gm - 1, gd);
+};
+
+// تبدیل Date object به string شمسی
+export const dateToJalaliString = (date: Date): string => {
+  const [jy, jm, jd] = gregorianToJalali(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate()
+  );
+  return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+};
+
+// اعتبارسنجی تاریخ شمسی
+export const isValidJalaliDate = (dateString: string): boolean => {
+  try {
+    const [year, month, day] = dateString.split('/').map(Number);
+    if (year < 1300 || year > 1500) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    
+    // بررسی روزهای معتبر برای هر ماه
+    if (month <= 6 && day > 31) return false;
+    if (month > 6 && month < 12 && day > 30) return false;
+    if (month === 12 && day > 29) return false;
+    
+    return true;
+  } catch {
+    return false;
+  }
+};
+
