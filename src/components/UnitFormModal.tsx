@@ -1,27 +1,23 @@
+// src/components/UnitFormModal.tsx
+
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Unit } from '@/types/index.d';
-import { useEffect, useState } from 'react';
-import { toPersianDigits, formatJalaliDate, parseJalaliDate } from '@/lib/utils';
-import { 
-  XMarkIcon, 
-  HomeIcon, 
-  BuildingOfficeIcon, 
-  UserIcon, 
-  UsersIcon,
-  Square3Stack3DIcon,
-  TruckIcon,
-  CalendarDaysIcon
-} from '@heroicons/react/24/outline';
-import dynamic from 'next/dynamic';
+import { Unit, Building, Block } from '@/types/index.d';
+import { useEffect, useState, useRef, Fragment } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { toPersianDigits, toEnglishDigits } from '@/lib/utils';
+import { Listbox, Transition } from '@headlessui/react';
+import { CalendarIcon, CheckIcon, ChevronUpDownIcon, PlusCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import CustomDatePicker from './CustomDatePicker';
 
-const CustomDatePicker = dynamic(() => import('./CustomDatePicker'), { ssr: false });
-
-type UnitFormData = Omit<Unit, 'id' | 'residentSince'> & { 
+// F: تایپ فرم دیتا برای react-hook-form
+type UnitFormData = Omit<Unit, 'id' | 'balance' | 'area' | 'parkingSpots' | 'ownerSince' | 'residentSince'> & {
+  balance: number;
+  area: number;
+  parkingSpots: number;
+  ownerSince: Date | null;
   residentSince: Date | null;
-  hasParking: boolean;
-  parkingCount: number;
 };
 
 interface UnitFormModalProps {
@@ -29,380 +25,242 @@ interface UnitFormModalProps {
   onClose: () => void;
   onSubmit: (data: Omit<Unit, 'id'>) => void;
   initialData?: Unit | null;
+  building: Building | null;
 }
 
-const defaultFormState: UnitFormData = {
-  unitNumber: '',
-  floor: 0,
-  area: 0,
-  ownerName: '',
-  residentName: '',
-  ownerNationalId: '',
-  residentNationalId: '',
-  residentCount: 1,
-  residentSince: null,
-  status: 'Vacant',
-  hasParking: false,
-  parkingCount: 0
-};
+export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, building }: UnitFormModalProps) {
+  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<UnitFormData>();
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  
+  // F: استیت برای فعال/غیرفعال کردن فیلدهای عددی
+  const [isAreaEnabled, setIsAreaEnabled] = useState(false);
+  const [isParkingEnabled, setIsParkingEnabled] = useState(false);
 
-export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }: UnitFormModalProps) {
-  const [formData, setFormData] = useState<UnitFormData>(defaultFormState);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const status = watch('status');
+  const ownerName = watch('ownerName');
+  const ownerContact = watch('ownerContact');
+  const ownerSince = watch('ownerSince');
 
+  // F: افکت برای واکشی بلوک‌ها
+  useEffect(() => {
+    if (isOpen && building?.hasBlocks && building.id) {
+      const fetchBlocks = async () => {
+        setIsLoadingBlocks(true);
+        try {
+          // F: استفاده از مسیر صحیح API
+          const res = await fetch(`/api/buildings/${building.id}/blocks`);
+          const data = await res.json();
+          if (data.success) setBlocks(data.data);
+        } catch (error) {
+          console.error("Failed to fetch blocks", error);
+        } finally {
+          setIsLoadingBlocks(false);
+        }
+      };
+      fetchBlocks();
+    }
+  }, [isOpen, building]);
+
+  // F: افکت برای پر کردن فرم با داده‌های اولیه یا ریست کردن آن
   useEffect(() => {
     if (isOpen) {
-      setErrors({});
       if (initialData) {
-        setFormData({
+        reset({
           ...initialData,
-          residentSince: initialData.residentSince ? parseJalaliDate(initialData.residentSince) : null,
-          hasParking: (initialData as any).hasParking || false,
-          parkingCount: (initialData as any).parkingCount || 0
+          ownerSince: initialData.ownerSince ? new Date(initialData.ownerSince) : null,
+          residentSince: initialData.residentSince ? new Date(initialData.residentSince) : null,
         });
+        setIsAreaEnabled(initialData.area > 0);
+        setIsParkingEnabled(initialData.parkingSpots > 0);
       } else {
-        setFormData(defaultFormState);
+        reset({
+          type: 'Residential',
+          status: 'Vacant',
+          hasStorage: false,
+          area: 0,
+          parkingSpots: 0,
+          balance: 0,
+        });
+        setIsAreaEnabled(false);
+        setIsParkingEnabled(false);
       }
     }
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, reset]);
 
+  // F: افکت برای همگام‌سازی اطلاعات ساکن با مالک
   useEffect(() => {
-    if (formData.status === 'OwnerOccupied') {
-      setFormData(prev => ({
-        ...prev,
-        residentName: prev.ownerName,
-        residentNationalId: prev.ownerNationalId,
-      }));
-    } else if (formData.status === 'Vacant') {
-      setFormData(prev => ({
-        ...prev,
-        residentName: '',
-        residentNationalId: '',
-        residentCount: 1,
-        residentSince: null,
-      }));
+    if (status === 'OwnerOccupied') {
+      setValue('residentName', ownerName);
+      setValue('residentContact', ownerContact);
+      setValue('residentSince', ownerSince);
+    } else if (status === 'Vacant') {
+      setValue('residentName', ' - ');
+      setValue('residentContact', ' - ');
+      setValue('residentSince', null);
     }
-  }, [formData.status, formData.ownerName, formData.ownerNationalId]);
+  }, [status, ownerName, ownerContact, ownerSince, setValue]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    const newValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-    
-    setFormData((prev) => ({ 
-      ...prev, 
-      [name]: newValue,
-      // اگر پارکینگ غیرفعال شد، تعداد را صفر کن
-      ...(name === 'hasParking' && !newValue ? { parkingCount: 0 } : {})
-    }));
-    
-    if (errors[name]) {
-      setErrors(prev => ({...prev, [name]: ''}));
-    }
+  const handleFormSubmit = (data: UnitFormData) => {
+    const finalData = {
+      ...data,
+      // F: تبدیل اعداد فارسی به انگلیسی قبل از ارسال
+      unitNumber: toEnglishDigits(data.unitNumber),
+      ownerContact: toEnglishDigits(data.ownerContact),
+      residentContact: toEnglishDigits(data.residentContact),
+      // F: تبدیل تاریخ‌ها به فرمت ISO String
+      ownerSince: data.ownerSince ? data.ownerSince.toISOString() : null,
+      residentSince: data.residentSince ? data.residentSince.toISOString() : null,
+    };
+    onSubmit(finalData);
   };
-
-  const handleDateChange = (name: keyof UnitFormData) => (date: Date | undefined) => {
-    setFormData((prev) => ({ ...prev, [name]: date || null }));
-    if (errors[name]) {
-      setErrors(prev => ({...prev, [name]: ''}));
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: { [key: string]: string } = {};
-    
-    if (!formData.unitNumber.trim()) newErrors.unitNumber = 'وارد کردن شماره واحد الزامی است.';
-    if (formData.floor < 0) newErrors.floor = 'طبقه نمی‌تواند منفی باشد.';
-    if (formData.area <= 0) newErrors.area = 'مساحت باید بیشتر از صفر باشد.';
-    if (!formData.ownerName.trim()) newErrors.ownerName = 'وارد کردن نام مالک الزامی است.';
-    if (!formData.ownerNationalId.trim()) newErrors.ownerNationalId = 'وارد کردن کد ملی مالک الزامی است.';
-    
-    if (formData.status === 'TenantOccupied') {
-      if (!formData.residentName.trim()) newErrors.residentName = 'وارد کردن نام ساکن الزامی است.';
-      if (!formData.residentNationalId.trim()) newErrors.residentNationalId = 'وارد کردن کد ملی ساکن الزامی است.';
-    }
-    
-    if (formData.status !== 'Vacant' && !formData.residentSince) {
-      newErrors.residentSince = 'انتخاب تاریخ سکونت الزامی است.';
-    }
-    
-    if (formData.hasParking && formData.parkingCount <= 0) {
-      newErrors.parkingCount = 'تعداد پارکینگ باید بیشتر از صفر باشد.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    onSubmit({
-      ...formData,
-      floor: Number(formData.floor),
-      area: Number(formData.area),
-      residentCount: Number(formData.residentCount),
-      parkingCount: Number(formData.parkingCount),
-      residentSince: formData.residentSince ? formatJalaliDate(formData.residentSince) : undefined,
-    });
-    onClose();
-  };
-
-  const modalTitle = initialData ? `ویرایش واحد ${toPersianDigits(initialData.unitNumber)}` : 'افزودن واحد جدید';
+  
+  const selectedBlock = blocks.find(b => b.id === watch('blockId'));
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4"
           onClick={onClose}
         >
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-[var(--bg-secondary)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-[var(--border-color)]"
+            ref={modalRef}
+            initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl relative bg-[var(--bg-secondary)] border border-[var(--border-color)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[var(--text-color)] flex items-center gap-2">
-                <Square3Stack3DIcon className="w-6 h-6 text-[var(--accent-color)]" />
-                {modalTitle}
-              </h2>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-[var(--bg-color)] rounded-lg transition-colors"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </button>
+            {/* -- F: هدر بازسازی شده -- */}
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+                <div className="flex items-center gap-3">
+                    {initialData ? (
+                        <PencilSquareIcon className="w-6 h-6 text-[var(--accent-color)]"/>
+                    ) : (
+                        <PlusCircleIcon className="w-6 h-6 text-[var(--accent-color)]"/>
+                    )}
+                    <h2 className="text-lg font-bold">
+                        {initialData ? `ویرایش واحد ${toPersianDigits(initialData.unitNumber)}` : 'افزودن واحد جدید'}
+                    </h2>
+                </div>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* اطلاعات واحد */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
-                    <HomeIcon className="w-5 h-5" />
-                    اطلاعات واحد
-                  </h3>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--text-color)] mb-1">شماره واحد *</label>
-                    <input
-                      type="text"
-                      name="unitNumber"
-                      value={formData.unitNumber}
-                      onChange={handleChange}
-                      className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                      placeholder="مثال: ۱۰۱"
+            <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 space-y-5">
+              
+              {/* -- اطلاعات اصلی -- */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {building?.hasBlocks && (
+                    <Controller
+                      name="blockId"
+                      control={control}
+                      rules={{ required: 'انتخاب بلوک الزامی است' }}
+                      render={({ field }) => (
+                        <FieldWrapper label="بلوک" error={errors.blockId}>
+                          <Listbox {...field}>
+                            {/* ... (کد Listbox از نسخه قبلی بدون تغییر) ... */}
+                            <div className="relative">
+                            <Listbox.Button className="form-input text-right">
+                              <span className="block truncate">{selectedBlock ? selectedBlock.name : (isLoadingBlocks ? "در حال بارگذاری..." : "انتخاب بلوک")}</span>
+                              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                                <ChevronUpDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                              </span>
+                            </Listbox.Button>
+                            <Transition as={Fragment} leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
+                              <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-[var(--bg-color)] py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm">
+                                {blocks.map((block) => (
+                                  <Listbox.Option key={block.id} className={({ active }) =>`relative cursor-default select-none py-2 pl-10 pr-4 ${active ? 'bg-[var(--accent-color)]/20' : ''}`} value={block.id}>
+                                    {({ selected }) => (
+                                      <>
+                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>{block.name}</span>
+                                        {selected ? (<span className="absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--accent-color)]"><CheckIcon className="h-5 w-5" aria-hidden="true" /></span>) : null}
+                                      </>
+                                    )}
+                                  </Listbox.Option>
+                                ))}
+                              </Listbox.Options>
+                            </Transition>
+                          </div>
+                          </Listbox>
+                        </FieldWrapper>
+                      )}
                     />
-                    {errors.unitNumber && <p className="text-red-500 text-sm mt-1">{errors.unitNumber}</p>}
-                  </div>
+                  )}
+                  
+                  <InputField label="شماره واحد" error={errors.unitNumber} {...register('unitNumber', { required: 'شماره واحد الزامی است' })} />
+                  
+                  <FieldWrapper label="طبقه" error={errors.floor}>
+                    <select className="form-input" {...register('floor', { required: 'انتخاب طبقه الزامی است' })}>
+                      <option value="">انتخاب کنید...</option>
+                      {Array.from({ length: building?.floorsCount || 0 }, (_, i) => i + 1).map(f => (
+                          <option key={f} value={f}>طبقه {toPersianDigits(f)}</option>
+                      ))}
+                    </select>
+                  </FieldWrapper>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">طبقه *</label>
-                      <input
-                        type="number"
-                        name="floor"
-                        value={formData.floor}
-                        onChange={handleChange}
-                        className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                        placeholder="مثال: ۱"
-                      />
-                      {errors.floor && <p className="text-red-500 text-sm mt-1">{errors.floor}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">مساحت (متر مربع) *</label>
-                      <input
-                        type="number"
-                        name="area"
-                        value={formData.area}
-                        onChange={handleChange}
-                        className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                        placeholder="مثال: ۸۰"
-                      />
-                      {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area}</p>}
-                    </div>
-                  </div>
-
-                  {/* پارکینگ */}
-                  <div className="space-y-3">
+                  <FieldWrapper label="مساحت (متر)" error={errors.area}>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name="hasParking"
-                        checked={formData.hasParking}
-                        onChange={handleChange}
-                        className="rounded border-[var(--border-color)]"
-                      />
-                      <label className="text-sm font-medium text-[var(--text-color)] flex items-center gap-2">
-                        <TruckIcon className="w-4 h-4" />
-                        دارای پارکینگ
-                      </label>
+                      <input type="checkbox" checked={isAreaEnabled} onChange={e => setIsAreaEnabled(e.target.checked)} className="h-5 w-5 rounded"/>
+                      <input type="number" step="0.01" className="form-input" placeholder='مثلا: ۱۲۰' disabled={!isAreaEnabled} {...register('area', { valueAsNumber: true })}/>
                     </div>
-                    
-                    {formData.hasParking && (
-                      <div>
-                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1">تعداد پارکینگ *</label>
-                        <input
-                          type="number"
-                          name="parkingCount"
-                          value={formData.parkingCount}
-                          onChange={handleChange}
-                          min="1"
-                          className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                          placeholder="مثال: ۱"
-                        />
-                        {errors.parkingCount && <p className="text-red-500 text-sm mt-1">{errors.parkingCount}</p>}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  </FieldWrapper>
+              </div>
+              
+              {/* -- مشخصات تکمیلی -- */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center pt-2">
+                  <FieldWrapper label="تعداد پارکینگ" error={errors.parkingSpots}>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={isParkingEnabled} onChange={e => setIsParkingEnabled(e.target.checked)} className="h-5 w-5 rounded"/>
+                      <input type="number" className="form-input" disabled={!isParkingEnabled} {...register('parkingSpots', { valueAsNumber: true })}/>
+                    </div>
+                  </FieldWrapper>
 
-                {/* اطلاعات مالک */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
-                    <UserIcon className="w-5 h-5" />
-                    اطلاعات مالک
-                  </h3>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--text-color)] mb-1">نام مالک *</label>
-                    <input
-                      type="text"
-                      name="ownerName"
-                      value={formData.ownerName}
-                      onChange={handleChange}
-                      className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                      placeholder="مثال: محمد محمدی"
-                    />
-                    {errors.ownerName && <p className="text-red-500 text-sm mt-1">{errors.ownerName}</p>}
+                  <FieldWrapper label="نوع واحد">
+                      <select className="form-input" {...register('type')}>
+                          <option value="Residential">مسکونی</option>
+                          <option value="Commercial">تجاری</option>
+                          <option value="Official">اداری</option>
+                      </select>
+                  </FieldWrapper>
+                  
+                  <div className="flex items-center pt-6">
+                      <input type="checkbox" id="hasStorage" className="h-4 w-4 rounded" {...register('hasStorage')}/>
+                      <label htmlFor="hasStorage" className="mr-2 block text-sm">دارای انباری</label>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--text-color)] mb-1">کد ملی مالک *</label>
-                    <input
-                      type="text"
-                      name="ownerNationalId"
-                      value={formData.ownerNationalId}
-                      onChange={handleChange}
-                      className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                      placeholder="مثال: ۱۲۳۴۵۶۷۸۹۰"
-                    />
-                    {errors.ownerNationalId && <p className="text-red-500 text-sm mt-1">{errors.ownerNationalId}</p>}
-                  </div>
-                </div>
+              </div>
+              
+              <hr className="border-[var(--border-color)] my-4" />
+              {/* -- اطلاعات مالک و ساکن در دو بخش مجزا -- */}
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <InputField label="نام مالک" error={errors.ownerName} {...register('ownerName', { required: 'نام مالک الزامی است' })} />
+                  <InputField label="تماس مالک" type="tel" error={errors.ownerContact} {...register('ownerContact', { required: 'شماره تماس مالک الزامی است' })} />
+                  <FieldWrapper label="تاریخ تملک">
+                    <Controller name="ownerSince" control={control} render={({ field }) => <CustomDatePicker value={field.value} onChange={field.onChange} />} />
+                  </FieldWrapper>
               </div>
 
-              {/* اطلاعات سکونت */}
-              <div className="mt-6 space-y-4">
-                <h3 className="text-lg font-semibold text-[var(--text-color)] border-b border-[var(--border-color)] pb-2 flex items-center gap-2">
-                  <UsersIcon className="w-5 h-5" />
-                  اطلاعات سکونت
-                </h3>
+              <hr className="border-[var(--border-color)] my-4" />
 
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text-color)] mb-1">وضعیت واحد</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                  >
-                    <option value="Vacant">واحد خالی</option>
-                    <option value="OwnerOccupied">مالک ساکن است</option>
-                    <option value="TenantOccupied">مستاجر ساکن است</option>
-                  </select>
-                </div>
-
-                {formData.status !== 'Vacant' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">
-                        {formData.status === 'OwnerOccupied' ? 'نام مالک' : 'نام ساکن'} *
-                      </label>
-                      <input
-                        type="text"
-                        name="residentName"
-                        value={formData.residentName}
-                        onChange={handleChange}
-                        disabled={formData.status === 'OwnerOccupied'}
-                        className={`w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] ${formData.status === 'OwnerOccupied' ? 'opacity-50' : ''}`}
-                        placeholder={formData.status === 'OwnerOccupied' ? 'همان نام مالک' : 'مثال: علی رضایی'}
-                      />
-                      {errors.residentName && <p className="text-red-500 text-sm mt-1">{errors.residentName}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-color)] mb-1">
-                        {formData.status === 'OwnerOccupied' ? 'کد ملی مالک' : 'کد ملی ساکن'} *
-                      </label>
-                      <input
-                        type="text"
-                        name="residentNationalId"
-                        value={formData.residentNationalId}
-                        onChange={handleChange}
-                        disabled={formData.status === 'OwnerOccupied'}
-                        className={`w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)] ${formData.status === 'OwnerOccupied' ? 'opacity-50' : ''}`}
-                        placeholder={formData.status === 'OwnerOccupied' ? 'همان کد ملی مالک' : 'مثال: ۰۹۸۷۶۵۴۳۲۱'}
-                      />
-                      {errors.residentNationalId && <p className="text-red-500 text-sm mt-1">{errors.residentNationalId}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1 flex items-center gap-2">
-                          <UsersIcon className="w-4 h-4" />
-                          تعداد ساکنین
-                        </label>
-                        <input
-                          type="number"
-                          name="residentCount"
-                          value={formData.residentCount}
-                          onChange={handleChange}
-                          className="w-full p-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-color)]"
-                          placeholder="مثال: ۴"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-[var(--text-color)] mb-1 flex items-center gap-2">
-                          <CalendarDaysIcon className="w-4 h-4" />
-                          تاریخ سکونت *
-                        </label>
-                        <CustomDatePicker
-                          value={formData.residentSince}
-                          onChange={handleDateChange('residentSince')}
-                          placeholder="انتخاب تاریخ"
-                        />
-                        {errors.residentSince && <p className="text-red-500 text-sm mt-1">{errors.residentSince}</p>}
-                      </div>
-                    </div>
-                  </>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FieldWrapper label="وضعیت سکونت">
+                    <select className="form-input" {...register('status')}>
+                      <option value="Vacant">خالی</option>
+                      <option value="OwnerOccupied">مالک ساکن</option>
+                      <option value="TenantOccupied">مستاجر ساکن</option>
+                    </select>
+                  </FieldWrapper>
+                  <InputField label="نام ساکن" error={errors.residentName} disabled={status !== 'TenantOccupied'} {...register('residentName', { required: status === 'TenantOccupied' ? 'نام ساکن الزامی است' : false })} />
+                  <FieldWrapper label="تاریخ سکونت">
+                    <Controller name="residentSince" control={control} render={({ field }) => <CustomDatePicker value={field.value} onChange={field.onChange} disabled={status === 'Vacant'} />} />
+                  </FieldWrapper>
               </div>
 
               <div className="pt-6 flex justify-end gap-3">
-                <button 
-                  type="button" 
-                  onClick={onClose} 
-                  className="px-4 py-2 rounded-lg transition-colors" 
-                  style={{backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)'}}
-                >
-                  انصراف
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-6 py-2 rounded-lg text-white font-semibold transition-transform duration-200 hover:scale-105" 
-                  style={{backgroundColor: 'var(--accent-color)'}}
-                >
-                  ذخیره
-                </button>
+                <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] hover:bg-[var(--bg-hover)]">انصراف</button>
+                <button type="submit" className="px-5 py-2 rounded-lg text-white bg-[var(--accent-color)] hover:bg-[var(--accent-hover-color)]">ذخیره</button>
               </div>
             </form>
           </motion.div>
@@ -411,3 +269,18 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData }
     </AnimatePresence>
   );
 }
+
+// -- F: کامپوننت‌های کمکی برای نمایش خطاها و لیبل‌ها --
+const FieldWrapper = ({ label, error, children }: { label: string, error?: { message?: string }, children: React.ReactNode }) => (
+    <div>
+        <label className="text-sm font-medium mb-1 block">{label}</label>
+        {children}
+        {error && <p className="text-red-500 text-xs mt-1">{error.message}</p>}
+    </div>
+);
+
+const InputField = ({ label, error, ...props }: { label: string, error?: { message?: string } } & React.InputHTMLAttributes<HTMLInputElement>) => (
+    <FieldWrapper label={label} error={error}>
+        <input {...props} className={`form-input ${error ? 'border-red-500' : ''}`} />
+    </FieldWrapper>
+);

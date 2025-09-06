@@ -1,82 +1,109 @@
 // src/lib/db/seeds.ts
-import { db } from './connection.ts';
+import { prisma } from './prisma';
 import bcrypt from 'bcryptjs';
+import { BuildingType, UsageType } from '@prisma/client';
 
 export async function seedDatabase(): Promise<void> {
-  try {
-    // بررسی وجود ساختمان
-    const existingBuildings = await db.query<any[]>(
-      `SELECT id FROM buildings WHERE name = ? LIMIT 1`,
-      ['ساختمان نمونه']
-    );
+  // --- Seed Building ---
+  console.log('Searching for sample building...');
+  const existingBuilding = await prisma.building.findFirst({
+    where: { name: 'ساختمان نمونه' },
+  });
 
-    let buildingId: number;
+  let buildingId: number;
 
-    if (existingBuildings.length === 0) {
-      const buildingResult = await db.query(
-        `INSERT INTO buildings (name, address, total_units, manager_name, manager_phone)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['ساختمان نمونه', 'آدرس نمونه', 10, 'مدیر ساختمان', '09123456789']
-      );
-      buildingId = (buildingResult as any).insertId;
-    } else {
-      buildingId = existingBuildings[0].id;
-    }
-
-    // بررسی وجود واحدها برای این ساختمان
-    const existingUnits = await db.query<any[]>(
-      `SELECT COUNT(*) as count FROM units WHERE building_id = ?`,
-      [buildingId]
-    );
-
-    if (existingUnits[0].count === 0) {
-      const units = [
-        { unit_number: '1', area: 80.5, floor_number: 1, rent_amount: 5000000 },
-        { unit_number: '2', area: 95.0, floor_number: 1, rent_amount: 6000000 },
-        { unit_number: '3', area: 80.5, floor_number: 2, rent_amount: 5000000 },
-        { unit_number: '4', area: 95.0, floor_number: 2, rent_amount: 6000000 },
-      ];
-      for (const unit of units) {
-        await db.query(
-          `INSERT INTO units (building_id, unit_number, area, floor_number, rent_amount, is_occupied)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [buildingId, unit.unit_number, unit.area, unit.floor_number, unit.rent_amount, false]
-        );
-      }
-    }
-
-    // بررسی وجود کاربر admin
-    const existingAdmin = await db.query<any[]>(
-      `SELECT id FROM users WHERE username = ? LIMIT 1`,
-      ['admin']
-    );
-
-    if (existingAdmin.length === 0) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await db.query(
-        `INSERT INTO users (building_id, username, password_hash, full_name, role)
-         VALUES (?, ?, ?, ?, ?)`,
-        [buildingId, 'admin', hashedPassword, 'مدیر سیستم', 'admin']
-      );
-    }
-
-    // بررسی وجود تنظیمات شارژ
-    const existingChargeSettings = await db.query<any[]>(
-      `SELECT id FROM charge_settings WHERE building_id = ? LIMIT 1`,
-      [buildingId]
-    );
-
-    if (existingChargeSettings.length === 0) {
-      await db.query(
-        `INSERT INTO charge_settings (building_id, charge_per_square_meter, parking_charge)
-         VALUES (?, ?, ?)`,
-        [buildingId, 50000, 200000]
-      );
-    }
-
-    console.log('Database seeded successfully');
-  } catch (error) {
-    console.error('Error seeding database:', error);
-    throw error;
+  if (!existingBuilding) {
+    console.log('Creating sample building...');
+    const newBuilding = await prisma.building.create({
+      data: {
+        name: 'ساختمان نمونه',
+        address: 'آدرس نمونه',
+        // ✅✅✅ تصحیح شده: استفاده از camelCase
+        totalUnits: 10,
+        managerName: 'مدیر ساختمان',
+        managerPhone: '09123456789',
+        type: BuildingType.APARTMENT,
+        usage: UsageType.RESIDENTIAL,
+        description: 'این یک ساختمان نمونه برای تست است.',
+        hasBlocks: false,
+        blocksCount: 0,
+      },
+    });
+    buildingId = newBuilding.id;
+    console.log(`Building created with ID: ${buildingId}`);
+  } else {
+    buildingId = existingBuilding.id;
+    console.log(`Building already exists with ID: ${buildingId}`);
   }
+
+  // --- Seed Units for the building ---
+  console.log('Checking for units...');
+  const unitsCount = await prisma.unit.count({
+    where: { buildingId: buildingId },
+  });
+
+  if (unitsCount === 0) {
+    console.log('Creating sample units...');
+    await prisma.unit.createMany({
+      data: [
+        { buildingId: buildingId, unitNumber: '1', area: 80.5, floorNumber: 1, rentAmount: 5000000 },
+        { buildingId: buildingId, unitNumber: '2', area: 95.0, floorNumber: 1, rentAmount: 6000000 },
+        { buildingId: buildingId, unitNumber: '3', area: 80.5, floorNumber: 2, rentAmount: 5000000 },
+        { buildingId: buildingId, unitNumber: '4', area: 95.0, floorNumber: 2, rentAmount: 6000000 },
+      ],
+    });
+    console.log('Sample units created.');
+  } else {
+    console.log('Units already exist.');
+  }
+
+  // --- Seed Admin User ---
+  console.log('Searching for admin user...');
+  // ✅✅✅ تصحیح شده: استفاده از prisma.user (مفرد و camelCase)
+  const existingAdmin = await prisma.user.findUnique({
+    where: { username: 'admin' },
+  });
+
+  if (!existingAdmin) {
+    console.log('Creating admin user...');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    // ✅✅✅ تصحیح شده: استفاده از prisma.user و فیلدهای camelCase
+    await prisma.user.create({
+      data: {
+        buildingId: buildingId,
+        username: 'admin',
+        password: hashedPassword, // ✅ فیلد صحیح مطابق با Prisma schema
+        fullName: 'مدیر سیستم',
+        role: 'admin',
+      },
+    });
+    console.log('Admin user created.');
+  } else {
+    console.log('Admin user already exists.');
+  }
+  
+  // --- Seed Charge Settings ---
+  console.log('Searching for charge settings...');
+  // ✅✅✅ تصحیح شده: استفاده از prisma.chargeSettings (camelCase)
+  const existingChargeSettings = await prisma.chargeSettings.findUnique({
+    // ✅✅✅ تصحیح شده: استفاده از buildingId (camelCase)
+    where: { buildingId: buildingId },
+  });
+
+  if (!existingChargeSettings) {
+    console.log('Creating charge settings...');
+    // ✅✅✅ تصحیح شده: استفاده از prisma.chargeSettings و فیلدهای camelCase
+    await prisma.chargeSettings.create({
+      data: {
+        buildingId: buildingId,
+        chargePerSquareMeter: 50000,
+        parkingCharge: 200000
+      }
+    });
+    console.log('Charge settings created.');
+  } else {
+    console.log('Charge settings already exist.');
+  }
+
+  console.log('Database seeded successfully! ✅');
 }

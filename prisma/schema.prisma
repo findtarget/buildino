@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Building {
+  id             Int             @id @default(autoincrement())
+  name           String          @db.VarChar(255)
+  address        String?         @db.Text
+  totalUnits     Int?            @default(0) @map("total_units")
+  managerName    String?         @map("manager_name") @db.VarChar(255)
+  managerPhone   String?         @map("manager_phone") @db.VarChar(20)
+  type           BuildingType?
+  usage          UsageType?
+  hasBlocks      Boolean?        @default(false)
+  blocksCount    Int?            @default(0) @map("blocks_count")
+  description    String?         @db.Text
+  createdAt      DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime?       @updatedAt @map("updated_at") @db.Timestamp(0)
+  blocks         BuildingBlock[]
+  chargeSettings ChargeSettings?
+  reports        Report[]
+  transactions   Transaction[]
+  units          Unit[]
+  users          User[]
+
+  @@map("buildings")
+}
+
+model BuildingBlock {
+  id          Int      @id @default(autoincrement())
+  buildingId  Int      @map("building_id")
+  name        String
+  floorsCount Int?     @map("floors_count")
+  unitsCount  Int?     @map("units_count")
+  description String?  @db.Text
+  building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  units       Unit[]
+
+  @@index([buildingId], map: "building_blocks_building_id_fkey")
+  @@map("building_blocks")
+}
+
+model Unit {
+  id            Int            @id @default(autoincrement())
+  buildingId    Int            @map("building_id")
+  blockId       Int?           @map("block_id")
+  unitNumber    String         @map("unit_number") @db.VarChar(50)
+  area          Decimal?       @db.Decimal(10, 2)
+  balconyArea   Decimal?       @map("balcony_area") @db.Decimal(10, 2)
+  floorNumber   Int?           @map("floor_number")
+  residentName  String?        @map("resident_name") @db.VarChar(255)
+  residentPhone String?        @map("resident_phone") @db.VarChar(20)
+  rentAmount    Decimal?       @default(0) @map("rent_amount") @db.Decimal(15, 0)
+  isOccupied    Boolean?       @default(false) @map("is_occupied")
+  hasParking    Boolean?       @default(false) @map("has_parking")
+  parkingCount  Int?           @default(0) @map("parking_count")
+  description   String?        @db.Text
+  createdAt     DateTime?      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime?      @updatedAt @map("updated_at") @db.Timestamp(0)
+  transactions  Transaction[]
+  block         BuildingBlock? @relation(fields: [blockId], references: [id])
+  building      Building       @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "units_ibfk_1")
+
+  @@unique([buildingId, unitNumber], map: "unique_unit_building")
+  @@index([blockId], map: "units_block_id_fkey")
+  @@map("units")
+}
+
+model Transaction {
+  id              Int             @id @default(autoincrement())
+  buildingId      Int             @map("building_id")
+  unitId          Int?            @map("unit_id")
+  title           String          @db.VarChar(255)
+  amount          Decimal         @db.Decimal(15, 0)
+  type            TransactionType
+  category        String          @db.VarChar(100)
+  transactionDate DateTime        @map("transaction_date") @db.Date
+  description     String?         @db.Text
+  isCharge        Boolean?        @default(false) @map("is_charge")
+  createdAt       DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime?       @updatedAt @map("updated_at") @db.Timestamp(0)
+  building        Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "transactions_ibfk_1")
+  unit            Unit?           @relation(fields: [unitId], references: [id], onUpdate: NoAction, map: "transactions_ibfk_2")
+
+  @@index([buildingId], map: "transactions_ibfk_1")
+  @@index([unitId], map: "transactions_ibfk_2")
+  @@map("transactions")
+}
+
+model ChargeSettings {
+  id                   Int       @id @default(autoincrement())
+  buildingId           Int       @unique @map("building_id")
+  chargePerSquareMeter Decimal?  @default(0.00) @map("charge_per_square_meter") @db.Decimal(10, 2)
+  parkingCharge        Decimal?  @default(0) @map("parking_charge") @db.Decimal(10, 0)
+  otherFees            Decimal?  @default(0) @map("other_fees") @db.Decimal(10, 0)
+  lastUpdated          DateTime? @default(now()) @map("last_updated") @db.Timestamp(0)
+  building             Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "charge_settings_ibfk_1")
+
+  @@map("charge_settings")
+}
+
+model Report {
+  id            Int       @id @default(autoincrement())
+  buildingId    Int       @map("building_id")
+  reportType    String    @map("report_type") @db.VarChar(50)
+  periodStart   DateTime? @map("period_start") @db.Date
+  periodEnd     DateTime? @map("period_end") @db.Date
+  totalIncome   Decimal?  @default(0) @map("total_income") @db.Decimal(15, 0)
+  totalExpenses Decimal?  @default(0) @map("total_expenses") @db.Decimal(15, 0)
+  netBalance    Decimal?  @default(0) @map("net_balance") @db.Decimal(15, 0)
+  generatedById Int?      @map("generated_by")
+  generatedAt   DateTime? @default(now()) @map("generated_at") @db.Timestamp(0)
+  building      Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "reports_ibfk_1")
+  generatedBy   User?     @relation(fields: [generatedById], references: [id], onDelete: NoAction, map: "reports_ibfk_2")
+
+  @@index([buildingId], map: "reports_ibfk_1")
+  @@index([generatedById], map: "reports_ibfk_2")
+  @@map("reports")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  buildingId   Int       @map("building_id")
+  username     String    @unique @db.VarChar(100)
+  password     String    @map("password_hash") @db.VarChar(255)
+  fullName     String?   @map("full_name") @db.VarChar(255)
+  email        String?   @unique @db.VarChar(255)
+  phone        String?   @unique @db.VarChar(20)
+  role         UserRole  @default(manager)
+  isActive     Boolean?  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login") @db.Timestamp(0)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  refreshToken String?   @db.Text
+  reports      Report[]
+  building     Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "users_ibfk_1")
+
+  @@index([buildingId], map: "users_ibfk_1")
+  @@map("users")
+}
+
+enum BuildingType {
+  APARTMENT
+  COMMERCIAL
+  MIXED_USE
+  RESIDENTIAL_COMPLEX
+}
+
+enum UsageType {
+  RESIDENTIAL
+  COMMERCIAL
+  MIXED
+}
+
+enum TransactionType {
+  Income
+  Expense
+}
+
+enum UserRole {
+  admin
+  manager
+  accountant
+}

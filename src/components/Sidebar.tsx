@@ -1,7 +1,7 @@
 // src/components/Sidebar.tsx
 'use client';
 
-import { HomeIcon, BuildingOfficeIcon, ChartBarIcon, CalculatorIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, BuildingOfficeIcon, ChartBarIcon, CalculatorIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePathname, useRouter } from 'next/navigation';
@@ -15,6 +15,7 @@ interface SidebarProps {
 // F: حذف تنظیمات از منوی سایدبار - فقط صفحات اصلی
 const menuItems = [
   { label: 'داشبورد', icon: HomeIcon, href: '/dashboard' },
+  { label: 'مدیریت ساختمان‌ها', icon: BuildingOffice2Icon, href: '/buildings' },
   { label: 'مدیریت واحدها', icon: BuildingOfficeIcon, href: '/units' },
   { label: 'حسابداری', icon: CalculatorIcon , href: '/accounting' },
   { label: 'گزارش‌ها', icon: ChartBarIcon, href: '/reports' },

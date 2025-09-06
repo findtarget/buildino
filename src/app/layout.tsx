@@ -7,6 +7,8 @@ import { SettingsProvider } from "../app/context/SettingsContext"; // F: ایم�
 import PageTransition from "./page-transition";
 import ClientLayoutWrapper from "./ClientLayoutWrapper";
 import { ChargeSettingsProvider } from "@/app/context/ChargeSettingsContext";
+import { ActiveBuildingProvider } from "./context/ActiveBuildingContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 const vazirmatn = localFont({
   src: [
@@ -31,7 +33,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SettingsProvider>
             <PageTransition>
               <ChargeSettingsProvider>
-              <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+                <ActiveBuildingProvider>
+                  <AuthProvider>
+                  <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
+                  </AuthProvider>
+                </ActiveBuildingProvider>
               </ChargeSettingsProvider>
             </PageTransition>
           </SettingsProvider>

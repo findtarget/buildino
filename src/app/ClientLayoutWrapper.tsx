@@ -1,53 +1,43 @@
 // src/app/ClientLayoutWrapper.tsx
 'use client';
 
-import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import SettingsPanel from '@/components/SettingsPanel';
+import Sidebar from '@/components/Sidebar';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useEffect, useState } from 'react';
 
-export default function ClientLayoutWrapper({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+// مسیرهایی که نباید Header و Sidebar داشته باشند
+const NO_LAYOUT_ROUTES = ['/login', '/register'];
+
+export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const noLayoutRoutes = ['/login'];
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const [isClient, setIsClient] = useState(false);
 
-  if (noLayoutRoutes.includes(pathname)) {
+  // این useEffect برای جلوگیری از hydration mismatch لازم است
+  // چون usePathname در رندر اولیه سرور ممکن است با کلاینت متفاوت باشد
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // اگر در سمت سرور یا قبل از hydration هستیم، یا مسیر جزو صفحات بدون layout است، فقط children را نمایش بده
+  if (!isClient || NO_LAYOUT_ROUTES.includes(pathname)) {
     return <>{children}</>;
   }
 
+  // اگر مسیر جزو صفحات داشبورد است، Layout کامل را نمایش بده
   return (
-    <>
-      <div
-        className="flex h-screen"
-        style={{ backgroundColor: 'var(--bg-color)' }}
-      >
-        {/* سایدبار دسکتاپ */}
-        <Sidebar />
+    <div className="flex h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {/* سایدبار برای دسکتاپ */}
+      {!isMobile && <Sidebar />}
 
-        {/* سایدبار موبایل (کاملا کنترل شده) */}
-        <Sidebar
-          mobile
-          open={isMobileSidebarOpen}
-          onClose={() => setMobileSidebarOpen(false)}
-        />
-        
-        {/* F: این کانتینر جدید، فاصله‌گذاری هدر و محتوا را مدیریت می‌کند */}
-        <div className="flex-1 flex flex-col overflow-hidden p-4 sm:p-6 gap-6">
-          <Header onMenuClick={() => setMobileSidebarOpen(true)} />
-
-          <main className="flex-1 overflow-x-hidden overflow-y-auto">
-            {children}
-          </main>
-        </div>
-
-        {/* پنل تنظیمات به صورت سراسری در لایه اصلی */}
-        <SettingsPanel />
-      </div>
-    </>
+      {/* محتوای اصلی */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        {/* هدر در اینجا قرار می‌گیرد تا فقط در صفحات داخلی نمایش داده شود */}
+        <Header />
+        {children}
+      </main>
+    </div>
   );
 }
