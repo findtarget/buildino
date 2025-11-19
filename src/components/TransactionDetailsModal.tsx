@@ -3,7 +3,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { EnhancedTransaction, TransactionStatus, TransactionType } from '@/types/accounting';
-import { toPersianDigits, formatCurrency } from '@/lib/utils';
+import { toPersianDigits, formatCurrency, formatJalaliDate } from '@/lib/utils';
 import { getVendorName } from '@/lib/mockAccountingData';
 import { getAccountByCode } from '@/lib/chartOfAccounts';
 import { XMarkIcon, DocumentIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
@@ -123,7 +123,7 @@ export default function TransactionDetailsModal({
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <span className="text-[var(--text-color-muted)] text-sm">تاریخ:</span>
-                      <span className="col-span-2 text-[var(--text-color)]">{toPersianDigits(transaction.date)}</span>
+                      <span className="col-span-2 text-[var(--text-color)]">{formatJalaliDate(new Date(transaction.date))}</span>
                     </div>
                     {transaction.relatedUnitId && (
                       <div className="grid grid-cols-3 gap-2">
@@ -153,7 +153,7 @@ export default function TransactionDetailsModal({
                     )}
                     <div className="grid grid-cols-3 gap-2">
                       <span className="text-[var(--text-color-muted)] text-sm">تاریخ ایجاد:</span>
-                      <span className="col-span-2 text-[var(--text-color)] text-sm">{toPersianDigits(transaction.createdAt)}</span>
+                      <span className="col-span-2 text-[var(--text-color)] text-sm">{formatJalaliDate(new Date(transaction.createdAt))}</span>
                     </div>
                   </div>
                 </div>

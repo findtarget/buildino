@@ -1,3 +1,4 @@
+
 // src/types/charge.ts
 export interface UnitChargeInfo {
   id: number;
@@ -51,4 +52,13 @@ export interface MonthlyChargeFormData {
   selectedUnits: number[];
   selectedCategories: string[];
   description: string;
+}
+
+export interface ChargeSettings {
+  maintenanceRatePerSqm: number;
+  elevatorBaseRate: number;
+  janitorRate: number;
+  securityRate: number;
+  commercialMultiplier: number;
+  dueDayOfMonth: number;
 }

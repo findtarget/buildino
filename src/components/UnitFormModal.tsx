@@ -3,21 +3,28 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Unit, Building, Block } from '@/types/index.d';
+import { Unit, Building } from '@/types/index.d';
 import { useEffect, useState, useRef, Fragment } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { toPersianDigits, toEnglishDigits } from '@/lib/utils';
 import { Listbox, Transition } from '@headlessui/react';
-import { CalendarIcon, CheckIcon, ChevronUpDownIcon, PlusCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, ChevronUpDownIcon, PlusCircleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import CustomDatePicker from './CustomDatePicker';
 
-// F: تایپ فرم دیتا برای react-hook-form
-type UnitFormData = Omit<Unit, 'id' | 'balance' | 'area' | 'parkingSpots' | 'ownerSince' | 'residentSince'> & {
-  balance: number;
+// F: تعریف محلی تایپ Block بر اساس اسکیمای پریزما
+interface Block {
+  id: number;
+  name: string;
+  floorsCount?: number | null;
+  unitsCount?: number | null;
+}
+
+// F: تایپ فرم دیتا که دقیقا با تایپ Unit هماهنگ شده است
+type UnitFormData = Omit<Unit, 'id' | 'buildingId' | 'area' | 'ownerSince' | 'residentSince'> & {
   area: number;
-  parkingSpots: number;
   ownerSince: Date | null;
   residentSince: Date | null;
+  blockId: number | null; // F: برای کنترل بهتر فرم، null را می‌پذیریم
 };
 
 interface UnitFormModalProps {
@@ -33,15 +40,16 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
-  
-  // F: استیت برای فعال/غیرفعال کردن فیلدهای عددی
+
   const [isAreaEnabled, setIsAreaEnabled] = useState(false);
   const [isParkingEnabled, setIsParkingEnabled] = useState(false);
+  const [floorOptions, setFloorOptions] = useState<number[]>([]);
 
   const status = watch('status');
   const ownerName = watch('ownerName');
   const ownerContact = watch('ownerContact');
   const ownerSince = watch('ownerSince');
+  const selectedBlockId = watch('blockId');
 
   // F: افکت برای واکشی بلوک‌ها
   useEffect(() => {
@@ -49,10 +57,13 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
       const fetchBlocks = async () => {
         setIsLoadingBlocks(true);
         try {
-          // F: استفاده از مسیر صحیح API
           const res = await fetch(`/api/buildings/${building.id}/blocks`);
           const data = await res.json();
-          if (data.success) setBlocks(data.data);
+          if (data.success) {
+            setBlocks(data.data);
+          } else {
+            console.error("API error fetching blocks:", data.error);
+          }
         } catch (error) {
           console.error("Failed to fetch blocks", error);
         } finally {
@@ -63,25 +74,49 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
     }
   }, [isOpen, building]);
 
-  // F: افکت برای پر کردن فرم با داده‌های اولیه یا ریست کردن آن
+  // F: افکت برای به‌روزرسانی تعداد طبقات
+  useEffect(() => {
+    let count = 0;
+    if (building?.hasBlocks) {
+      const selectedBlock = blocks.find(b => b.id === selectedBlockId);
+      count = selectedBlock?.floorsCount || building?.floorsCount || 0;
+    } else {
+      count = building?.floorsCount || 0;
+    }
+    setFloorOptions(Array.from({ length: count }, (_, i) => i + 1));
+  }, [selectedBlockId, building, blocks]);
+
+  // F: افکت برای پر کردن فرم
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
+        const areaValue = initialData.area ? parseFloat(initialData.area) : 0;
         reset({
           ...initialData,
+          area: areaValue,
+          blockId: initialData.blockId || null,
           ownerSince: initialData.ownerSince ? new Date(initialData.ownerSince) : null,
           residentSince: initialData.residentSince ? new Date(initialData.residentSince) : null,
         });
-        setIsAreaEnabled(initialData.area > 0);
-        setIsParkingEnabled(initialData.parkingSpots > 0);
+        setIsAreaEnabled(areaValue > 0);
+        setIsParkingEnabled(initialData.parkingCount > 0);
       } else {
         reset({
+          unitNumber: '',
+          floorNumber: '' as any, // F: مقداردهی اولیه به رشته خالی برای جلوگیری از خطای uncontrolled
           type: 'Residential',
           status: 'Vacant',
           hasStorage: false,
           area: 0,
-          parkingSpots: 0,
+          parkingCount: 0,
           balance: 0,
+          ownerName: '',
+          ownerContact: '',
+          ownerSince: null,
+          residentName: '',
+          residentContact: '',
+          residentSince: null,
+          blockId: null,
         });
         setIsAreaEnabled(false);
         setIsParkingEnabled(false);
@@ -89,7 +124,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
     }
   }, [initialData, isOpen, reset]);
 
-  // F: افکت برای همگام‌سازی اطلاعات ساکن با مالک
+  // F: افکت برای همگام‌سازی اطلاعات ساکن
   useEffect(() => {
     if (status === 'OwnerOccupied') {
       setValue('residentName', ownerName);
@@ -103,20 +138,21 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
   }, [status, ownerName, ownerContact, ownerSince, setValue]);
 
   const handleFormSubmit = (data: UnitFormData) => {
-    const finalData = {
+    if (!building) return;
+
+    const finalData: Omit<Unit, 'id'> = {
       ...data,
-      // F: تبدیل اعداد فارسی به انگلیسی قبل از ارسال
+      buildingId: building.id,
       unitNumber: toEnglishDigits(data.unitNumber),
-      ownerContact: toEnglishDigits(data.ownerContact),
-      residentContact: toEnglishDigits(data.residentContact),
-      // F: تبدیل تاریخ‌ها به فرمت ISO String
+      area: data.area.toString(),
+      blockId: data.blockId || undefined,
       ownerSince: data.ownerSince ? data.ownerSince.toISOString() : null,
       residentSince: data.residentSince ? data.residentSince.toISOString() : null,
     };
     onSubmit(finalData);
   };
   
-  const selectedBlock = blocks.find(b => b.id === watch('blockId'));
+  const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
   return (
     <AnimatePresence>
@@ -133,14 +169,9 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
             className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl relative bg-[var(--bg-secondary)] border border-[var(--border-color)]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* -- F: هدر بازسازی شده -- */}
             <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
                 <div className="flex items-center gap-3">
-                    {initialData ? (
-                        <PencilSquareIcon className="w-6 h-6 text-[var(--accent-color)]"/>
-                    ) : (
-                        <PlusCircleIcon className="w-6 h-6 text-[var(--accent-color)]"/>
-                    )}
+                    {initialData ? <PencilSquareIcon className="w-6 h-6 text-[var(--accent-color)]"/> : <PlusCircleIcon className="w-6 h-6 text-[var(--accent-color)]"/>}
                     <h2 className="text-lg font-bold">
                         {initialData ? `ویرایش واحد ${toPersianDigits(initialData.unitNumber)}` : 'افزودن واحد جدید'}
                     </h2>
@@ -149,8 +180,6 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
             </div>
 
             <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 space-y-5">
-              
-              {/* -- اطلاعات اصلی -- */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {building?.hasBlocks && (
                     <Controller
@@ -159,8 +188,7 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
                       rules={{ required: 'انتخاب بلوک الزامی است' }}
                       render={({ field }) => (
                         <FieldWrapper label="بلوک" error={errors.blockId}>
-                          <Listbox {...field}>
-                            {/* ... (کد Listbox از نسخه قبلی بدون تغییر) ... */}
+                          <Listbox value={field.value} onChange={field.onChange}>
                             <div className="relative">
                             <Listbox.Button className="form-input text-right">
                               <span className="block truncate">{selectedBlock ? selectedBlock.name : (isLoadingBlocks ? "در حال بارگذاری..." : "انتخاب بلوک")}</span>
@@ -191,10 +219,10 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
                   
                   <InputField label="شماره واحد" error={errors.unitNumber} {...register('unitNumber', { required: 'شماره واحد الزامی است' })} />
                   
-                  <FieldWrapper label="طبقه" error={errors.floor}>
-                    <select className="form-input" {...register('floor', { required: 'انتخاب طبقه الزامی است' })}>
+                  <FieldWrapper label="طبقه" error={errors.floorNumber}>
+                    <select className="form-input" {...register('floorNumber', { required: 'انتخاب طبقه الزامی است' })}>
                       <option value="">انتخاب کنید...</option>
-                      {Array.from({ length: building?.floorsCount || 0 }, (_, i) => i + 1).map(f => (
+                      {floorOptions.map(f => (
                           <option key={f} value={f}>طبقه {toPersianDigits(f)}</option>
                       ))}
                     </select>
@@ -208,12 +236,11 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
                   </FieldWrapper>
               </div>
               
-              {/* -- مشخصات تکمیلی -- */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center pt-2">
-                  <FieldWrapper label="تعداد پارکینگ" error={errors.parkingSpots}>
+                  <FieldWrapper label="تعداد پارکینگ" error={errors.parkingCount}>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" checked={isParkingEnabled} onChange={e => setIsParkingEnabled(e.target.checked)} className="h-5 w-5 rounded"/>
-                      <input type="number" className="form-input" disabled={!isParkingEnabled} {...register('parkingSpots', { valueAsNumber: true })}/>
+                      <input type="number" className="form-input" disabled={!isParkingEnabled} {...register('parkingCount', { valueAsNumber: true })}/>
                     </div>
                   </FieldWrapper>
 
@@ -232,7 +259,6 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
               </div>
               
               <hr className="border-[var(--border-color)] my-4" />
-              {/* -- اطلاعات مالک و ساکن در دو بخش مجزا -- */}
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <InputField label="نام مالک" error={errors.ownerName} {...register('ownerName', { required: 'نام مالک الزامی است' })} />
@@ -270,7 +296,6 @@ export default function UnitFormModal({ isOpen, onClose, onSubmit, initialData, 
   );
 }
 
-// -- F: کامپوننت‌های کمکی برای نمایش خطاها و لیبل‌ها --
 const FieldWrapper = ({ label, error, children }: { label: string, error?: { message?: string }, children: React.ReactNode }) => (
     <div>
         <label className="text-sm font-medium mb-1 block">{label}</label>

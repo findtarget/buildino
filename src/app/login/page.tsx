@@ -86,7 +86,7 @@ export default function LoginPage() {
   // تابع بررسی خطاهای سرور و تبدیل به پیام فارسی
   const getErrorMessage = (error: string): string => {
     const errorMessages: { [key: string]: string } = {
-      'Invalid credentials': 'ایمیل یا رمز عبور اشتباه است',
+      'ایمیل یا رمز عبور اشتباه است': 'ایمیل یا رمز عبور اشتباه است',
       'User not found': 'کاربری با این ایمیل یافت نشد',
       'Invalid email format': 'فرمت ایمیل صحیح نیست',
       'Password too short': 'رمز عبور کوتاه است',
@@ -112,7 +112,7 @@ export default function LoginPage() {
     const value = e.target.value;
     setEmail(value);
     clearFieldError('email');
-    
+
     // اعتبارسنجی بلادرنگ
     if (value.trim() && !validateEmail(value.trim())) {
       setValidationErrors(prev => [
@@ -127,7 +127,7 @@ export default function LoginPage() {
     const value = e.target.value;
     setPassword(value);
     clearFieldError('password');
-    
+
     // اعتبارسنجی بلادرنگ
     if (value && value.length < 6) {
       setValidationErrors(prev => [
@@ -140,7 +140,7 @@ export default function LoginPage() {
   // تابع ارسال فرم
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     if (isLoading) return;
 
     // پاک کردن خطاهای قبلی
@@ -157,33 +157,38 @@ export default function LoginPage() {
     try {
       const response = await api.post('/auth/login', {
         email: email.trim().toLowerCase(),
-        password: password,
+        password: password
       });
 
-      if (response.success && response.data?.accessToken) {
-        await login(response.data.accessToken);
-        
+      const { success, data, error: apiError } = response.data;
+
+      // اصلاح شرط: استفاده از data.accessToken به جای response.data.accessToken
+      if (success && data?.accessToken) {
+        await login(data.accessToken, data.user);
+
         // پیام موفقیت (اختیاری)
         setTimeout(() => {
           router.push('/dashboard');
         }, 500);
-        
+
       } else {
-        const errorMessage = getErrorMessage(response.error || 'Unknown error');
+        const errorMessage = getErrorMessage(apiError || 'خطای ناشناخته');
         setError(errorMessage);
       }
-      
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError('خطای اتصال به سرور. لطفاً دوباره تلاش کنید.');
+      if (err.response?.status === 401) {
+        setError(getErrorMessage(err.response.data?.error || 'ایمیل یا رمز عبور اشتباه است'));
+      } else {
+        setError('خطای اتصال به سرور. لطفاً دوباره تلاش کنید.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // تابع دریافت خطای فیلد خاص
-  const getFieldError = (fieldName: string): string | undefined => {
-    return validationErrors.find(err => err.field === fieldName)?.message;
+  const getFieldError = (fieldName: string) => {
+     return validationErrors.find(err => err.field === fieldName)?.message;
   };
 
   // تابع بررسی معتبر بودن فیلد
@@ -202,9 +207,8 @@ export default function LoginPage() {
     router.push('/register');
   };
 
-  if (!isMounted) {
-    return null;
-  }
+  if (!isMounted) return null;
+
 
   return (
     <div
@@ -243,10 +247,9 @@ export default function LoginPage() {
               <UserIcon className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 opacity-50" />
               <input
                 type="email"
-                className={`w-full px-4 py-3 pr-12 pl-14 rounded-xl border-none outline-none transition-all ${
-                  getFieldError('email') ? 'ring-2 ring-red-500/50' : 
-                  isFieldValid('email') && email.trim() ? 'ring-2 ring-green-500/50' : ''
-                }`}
+                className={`w-full px-4 py-3 pr-12 pl-14 rounded-xl border-none outline-none transition-all ${getFieldError('email') ? 'ring-2 ring-red-500/50' :
+                    isFieldValid('email') && email.trim() ? 'ring-2 ring-green-500/50' : ''
+                  }`}
                 style={{
                   backgroundColor: 'var(--bg-color)',
                   boxShadow: 'inset 2px 2px 6px var(--shadow-light), inset -2px -2px 6px var(--shadow-dark)',
@@ -288,10 +291,9 @@ export default function LoginPage() {
               <LockClosedIcon className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 opacity-50" />
               <input
                 type={showPassword ? 'text' : 'password'}
-                className={`w-full px-4 py-3 pr-12 pl-20 rounded-xl border-none outline-none transition-all ${
-                  getFieldError('password') ? 'ring-2 ring-red-500/50' : 
-                  isFieldValid('password') && password ? 'ring-2 ring-green-500/50' : ''
-                }`}
+                className={`w-full px-4 py-3 pr-12 pl-20 rounded-xl border-none outline-none transition-all ${getFieldError('password') ? 'ring-2 ring-red-500/50' :
+                    isFieldValid('password') && password ? 'ring-2 ring-green-500/50' : ''
+                  }`}
                 style={{
                   backgroundColor: 'var(--bg-color)',
                   boxShadow: 'inset 2px 2px 6px var(--shadow-light), inset -2px -2px 6px var(--shadow-dark)',
@@ -301,7 +303,7 @@ export default function LoginPage() {
                 onChange={handlePasswordChange}
                 autoComplete="current-password"
               />
-              
+
               {/* آیکن وضعیت رمز عبور - کنار آیکن نمایش رمز */}
               {password && (
                 <div className="absolute left-12 top-1/2 -translate-y-1/2 z-10">
@@ -312,7 +314,7 @@ export default function LoginPage() {
                   )}
                 </div>
               )}
-              
+
               {/* دکمه نمایش/مخفی کردن رمز */}
               <button
                 type="button"
@@ -377,21 +379,21 @@ export default function LoginPage() {
         {/* بخش ثبت‌نام */}
         <div className="mt-8 text-center">
           <div className="flex items-center justify-center mb-4">
-            <div 
-              className="flex-1 h-px" 
+            <div
+              className="flex-1 h-px"
               style={{ backgroundColor: 'var(--border-color)' }}
             ></div>
             <span className="px-4 text-sm opacity-60">یا</span>
-            <div 
-              className="flex-1 h-px" 
+            <div
+              className="flex-1 h-px"
               style={{ backgroundColor: 'var(--border-color)' }}
             ></div>
           </div>
-          
+
           <p className="text-sm opacity-70 mb-3">
             حساب کاربری ندارید؟
           </p>
-          
+
           <motion.button
             type="button"
             onClick={handleRegisterRedirect}

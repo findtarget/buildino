@@ -1,151 +1,131 @@
 // src/app/api/auth/login/route.ts
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { prisma } from '@/lib/db/prisma';
+import { generateAccessToken, generateRefreshToken } from '@/lib/auth/jwt';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    console.log('🚀 [Login API] Received a POST request to /api/auth/login.');
-
     const { email, password } = await request.json();
-    console.log(`🔵 [Login API] Attempting to find user with email: ${email}`);
 
     if (!email || !password) {
-      console.log('❌ [Login API] Email or password is missing.');
       return NextResponse.json(
-        { success: false, error: 'ایمیل و رمز عبور الزامی هستند' },
+        { success: false, error: 'ایمیل و رمز عبور الزامی است' },
         { status: 400 }
       );
     }
 
-    // Find user by email
+    // جستجوی کاربر در دیتابیس
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        building: true,
-      },
+        building: {
+          select: { id: true, name: true, address: true }
+        }
+      }
     });
 
     if (!user) {
-      console.log('❌ [Login API] User not found with email: ', email);
+      console.warn(`⚠️ [Login API] User not found for email: ${email}`);
       return NextResponse.json(
-        { success: false, error: 'کاربری با این ایمیل یافت نشد' },
+        { success: false, error: 'ایمیل یا رمز عبور اشتباه است' },
         { status: 401 }
       );
     }
 
     if (!user.isActive) {
-      console.log('❌ [Login API] User account is inactive: ', email);
+      console.warn(`⚠️ [Login API] Inactive account: ${user.email}`);
       return NextResponse.json(
         { success: false, error: 'حساب کاربری غیرفعال است' },
         { status: 401 }
       );
     }
 
-    // Check password - استفاده از نام درست فیلد
-    const passwordField = user.password || user.password_hash;
-    const isPasswordValid = await bcrypt.compare(password, passwordField);
-    if (!isPasswordValid) {
-      console.log('❌ [Login API] Invalid password for user: ', email);
+    // بررسی هش پسورد
+    if (!user.passwordHash) {
+      console.warn(`⚠️ [Login API] No password hash stored for: ${user.email}`);
       return NextResponse.json(
-        { success: false, error: 'رمز عبور نادرست است' },
+        { success: false, error: 'ایمیل یا رمز عبور اشتباه است' },
         { status: 401 }
       );
     }
 
-    console.log(`✅ [Login API] User authenticated successfully: ${email}`);
-
-    // Get JWT secrets from environment variables
-    const accessTokenSecret = process.env.JWT_SECRET;
-    const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
-
-    console.log('🔍 [Login API] Checking JWT secrets...');
-    console.log('JWT_SECRET exists:', !!accessTokenSecret);
-    console.log('REFRESH_TOKEN_SECRET exists:', !!refreshTokenSecret);
-
-    // Check if JWT secrets are defined
-    if (!accessTokenSecret || !refreshTokenSecret) {
-      console.error('❌ [Login API] JWT secrets are not defined in .env.local');
-      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('JWT')));
+    // بررسی رمز عبور با bcrypt
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      console.warn(`⚠️ [Login API] Invalid password for: ${user.email}`);
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'خطای تنظیمات سرور. لطفاً با مدیر سیستم تماس بگیرید.' 
-        },
-        { status: 500 }
+        { success: false, error: 'ایمیل یا رمز عبور اشتباه است' },
+        { status: 401 }
       );
     }
-    console.log('✅ [Login API] JWT secrets are loaded successfully.');
 
-    // Generate access token
-    const accessToken = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        buildingId: user.buildingId,
-      },
-      accessTokenSecret,
-      { expiresIn: '1h' }
-    );
+    // ایجاد توکن‌ها
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email!,
+      role: user.role,
+      buildingId: user.buildingId
+    });
+    const refreshToken = generateRefreshToken(user.id);
 
-    // Generate refresh token
-    const refreshToken = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-      },
-      refreshTokenSecret,
-      { expiresIn: '7d' }
-    );
-
-    // Update user's refresh token and last login
+    // ذخیره refresh token در دیتابیس
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
+      data: {
         refreshToken,
-        lastLogin: new Date() 
-      },
+        lastLogin: new Date()
+      }
     });
 
-    // Set cookies
+    // ست کردن کوکی‌ها
     const cookieStore = cookies();
+    const isProd = process.env.NODE_ENV === 'production';
     cookieStore.set('accessToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd ? true : false,
       sameSite: 'lax',
-      maxAge: 60 * 60, // 1 hour
+      path: '/',
+      maxAge: 24 * 60 * 60 // 24 ساعت
     });
-
     cookieStore.set('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd ? true : false,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 // 7 روز
     });
 
-    console.log(`✅ [Login API] Login successful for user: ${email}`);
+    console.log(`✅ [Login API] User logged in: ${user.email}`);
 
+    // پاسخ JSON با توکن‌ها هم در لایه بالا و هم در data
     return NextResponse.json({
       success: true,
-      message: 'ورود موفقیت‌آمیز بود',
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        building: user.building,
-      },
-      accessToken,
-      refreshToken,
+      accessToken,   // اضافه برای فرانت
+      refreshToken,  // اضافه برای فرانت
+      data: {
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          buildingId: user.buildingId,
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone,
+          role: user.role,
+          isActive: user.isActive,
+          lastLogin: user.lastLogin,
+          createdAt: user.createdAt,
+          building: user.building,
+        }
+      }
     });
 
   } catch (error) {
-    console.error('❌ [Login API] An unhandled error occurred in the try-catch block:', error);
+    console.error('❌ [Login API] Server error:', error);
     return NextResponse.json(
-      { success: false, error: 'خطای داخلی سرور' },
+      { success: false, error: 'خطای سرور داخلی' },
       { status: 500 }
     );
   }

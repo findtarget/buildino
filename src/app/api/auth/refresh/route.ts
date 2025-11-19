@@ -1,66 +1,140 @@
 // src/app/api/auth/refresh/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import type { User } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 
-// این خط را برای اطمینان نگه می‌داریم
-export const dynamic = 'force-dynamic';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
-interface TokenPayload {
-  userId: string;
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // راه‌حل جایگزین: خواندن کوکی مستقیماً از آبجکت request
-    const refreshToken = req.cookies.get('refreshToken')?.value;
+    if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+      console.error('❌ [Refresh API] JWT secrets not configured');
+      return NextResponse.json(
+        { success: false, error: 'پیکربندی سرور ناقص است' },
+        { status: 500 }
+      );
+    }
+
+    const cookieStore = await cookies();
+    const refreshToken = cookieStore.get('refreshToken')?.value;
 
     if (!refreshToken) {
-      return NextResponse.json({ success: false, error: 'No refresh token found' }, { status: 401 });
+      console.log('❌ [Refresh API] No refresh token found');
+      return NextResponse.json(
+        { success: false, error: 'توکن تازه‌سازی یافت نشد' },
+        { status: 401 }
+      );
     }
 
-    let payload: TokenPayload;
-    try {
-      payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET!) as TokenPayload;
-    } catch (error) {
-      console.error('Invalid or expired refresh token:', error);
-      // برای حذف کوکی، باید یک پاسخ جدید بسازیم و روی آن عمل کنیم
-      const response = NextResponse.json({ success: false, error: 'Invalid or expired refresh token' }, { status: 401 });
-      response.cookies.delete('refreshToken');
-      return response;
-    }
-
+    // تأیید صحت refresh token
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as any;
+    
+    // بررسی وجود کاربر و refresh token در دیتابیس
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-    });
-
-    if (!user) {
-      // اگر کاربر حذف شده باشد، کوکی او را پاک می‌کنیم
-      const response = NextResponse.json({ success: false, error: 'User not found' }, { status: 401 });
-      response.cookies.delete('refreshToken');
-      return response;
-    }
-
-    const newAccessToken = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
-    );
-
-    const { password: _, ...userWithoutPassword } = user;
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        accessToken: newAccessToken,
-        user: userWithoutPassword,
+      where: { 
+        id: decoded.userId,
+        refreshToken: refreshToken, // اطمینان از اینکه refresh token در DB موجود است
+      },
+      select: {
+        id: true,
+        buildingId: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        lastLogin: true,
+        createdAt: true,
+        building: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+          }
+        }
       },
     });
 
+    if (!user) {
+      console.log('❌ [Refresh API] User not found or refresh token mismatch');
+      return NextResponse.json(
+        { success: false, error: 'کاربر یافت نشد یا توکن نامعتبر است' },
+        { status: 401 }
+      );
+    }
+
+    if (!user.isActive) {
+      console.log('❌ [Refresh API] User account is inactive');
+      return NextResponse.json(
+        { success: false, error: 'حساب کاربری غیرفعال است' },
+        { status: 401 }
+      );
+    }
+
+    // ایجاد access token جدید
+    const newAccessToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        buildingId: user.buildingId,
+      },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // تنظیم access token جدید در cookie
+    cookieStore.set('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60, // 1 ساعت
+      path: '/',
+    });
+
+    console.log('✅ [Refresh API] Token refreshed successfully for user:', user.email);
+
+    return NextResponse.json({
+      success: true,
+      message: 'توکن با موفقیت تازه‌سازی شد',
+      accessToken: newAccessToken,
+      user: {
+        id: user.id,
+        buildingId: user.buildingId,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone,
+        role: user.role,
+        isActive: user.isActive,
+        lastLogin: user.lastLogin,
+        createdAt: user.createdAt,
+        building: user.building,
+      }
+    });
+
   } catch (error) {
-    console.error('Error in /api/auth/refresh:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.log('❌ [Refresh API] Invalid refresh token:', error.message);
+      return NextResponse.json(
+        { success: false, error: 'توکن تازه‌سازی نامعتبر است' },
+        { status: 401 }
+      );
+    }
+    
+    if (error instanceof jwt.TokenExpiredError) {
+      console.log('❌ [Refresh API] Refresh token expired');
+      return NextResponse.json(
+        { success: false, error: 'توکن تازه‌سازی منقضی شده است' },
+        { status: 401 }
+      );
+    }
+
+    console.error('❌ [Refresh API] Server error:', error);
+    return NextResponse.json(
+      { success: false, error: 'خطای سرور داخلی' },
+      { status: 500 }
+    );
   }
 }

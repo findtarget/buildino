@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { toPersianDigits, toEnglishDigits } from '@/lib/utils';
+import { apiHelpers } from '@/lib/api';
 
 interface Block {
   id: number;
@@ -22,10 +23,18 @@ interface Block {
   description?: string;
 }
 
+interface BuildingInfo {
+  id: number;
+  name: string;
+  hasBlocks?: boolean;
+  blocksCount?: number;
+}
+
 export default function BlocksTab() {
   const { buildingId } = useActiveBuilding();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(false);
+  const [buildingInfo, setBuildingInfo] = useState<BuildingInfo | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Block | null>(null);
@@ -40,22 +49,50 @@ export default function BlocksTab() {
 
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
 
-  // validate form
-  const validateForm = () => {
-    const errs: { [k: string]: string } = {};
-    if (!formData.name.trim()) errs.name = 'نام بلوک الزامیست';
-    return errs;
-  };
+  // بارگذاری اطلاعات ساختمان انتخاب‌شده و بلوک‌ها
+  useEffect(() => {
+    const loadData = async () => {
+      if (!buildingId) {
+        setBuildingInfo(null);
+        setBlocks([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const [buildingRes, blocksRes] = await Promise.all([
+          apiHelpers.get<BuildingInfo>(`/buildings/${buildingId}`),
+          apiHelpers.get<Block[]>(`/blocks?buildingId=${buildingId}`)
+        ]);
 
-  // load data with new endpoint
+        if (buildingRes.success) {
+          setBuildingInfo(buildingRes.data || null);
+        } else {
+          console.error('Failed to load building info:', buildingRes.error);
+        }
+
+        if (blocksRes.success) {
+          setBlocks(blocksRes.data || []);
+        } else {
+          console.error('Failed to load blocks:', blocksRes.error);
+        }
+      } catch (err) {
+        console.error('Error loading data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [buildingId]);
+
   const loadBlocks = async () => {
     if (!buildingId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/blocks?buildingId=${buildingId}`);
-      const json = await res.json();
-      if (res.ok && json.success) {
-        setBlocks(json.data || []);
+      const response = await apiHelpers.get<Block[]>(`/blocks?buildingId=${buildingId}`);
+      if (response.success) {
+        setBlocks(response.data || []);
+      } else {
+        console.error('Failed to load blocks:', response.error);
       }
     } catch (err) {
       console.error('Error loading blocks:', err);
@@ -64,14 +101,24 @@ export default function BlocksTab() {
     }
   };
 
-  useEffect(() => {
-    loadBlocks();
-  }, [buildingId]);
-
   const resetForm = () => {
     setFormData({ name: '', floorsCount: '', description: '' });
     setEditing(null);
     setErrors({});
+  };
+
+  // validate form
+  const validateForm = () => {
+    const errs: { [k: string]: string } = {};
+    if (!formData.name.trim()) errs.name = 'نام بلوک الزامیست';
+
+    // بررسی محدودیت تعداد بلوک
+    if (!editing && buildingInfo?.hasBlocks && buildingInfo?.blocksCount != null) {
+      if (blocks.length >= buildingInfo.blocksCount) {
+        errs.limit = `تعداد مجاز بلوک (${buildingInfo.blocksCount}) برای این ساختمان تکمیل شده است.`;
+      }
+    }
+    return errs;
   };
 
   const handleEdit = (blk: Block) => {
@@ -92,11 +139,14 @@ export default function BlocksTab() {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      // DELETE API
-      await fetch(`/api/blocks/${deleteTarget.id}`, { method: 'DELETE' });
-      loadBlocks();
+      const response = await apiHelpers.delete(`/blocks/${deleteTarget.id}`);
+      if (response.success) {
+        loadBlocks();
+      } else {
+        alert(response.error || 'خطا در حذف بلوک');
+      }
     } catch (err) {
       console.error('Error deleting block:', err);
     } finally {
@@ -116,46 +166,40 @@ export default function BlocksTab() {
       name: formData.name,
       floorsCount: formData.floorsCount
         ? Number(toEnglishDigits(formData.floorsCount))
-        : null,
+        : undefined,
       description: formData.description,
       buildingId
     };
 
-    const method = editing ? 'PUT' : 'POST';
-    const url = editing
-      ? `/api/blocks/${editing.id}`
-      : `/api/blocks`;
-
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const response = editing
+        ? await apiHelpers.put<Block>(`/blocks/${editing.id}`, payload)
+        : await apiHelpers.post<Block>('/blocks', payload);
+
+      if (response.success) {
         setFormOpen(false);
         resetForm();
         loadBlocks();
       } else {
-        alert(json.error || 'خطا در ذخیره بلوک');
+        alert(response.error || 'خطا در ذخیره بلوک');
       }
     } catch (err) {
       console.error('Error saving block:', err);
+      alert('یک خطای پیش‌بینی نشده رخ داد.');
     } finally {
       setLoading(false);
     }
   };
 
   if (!buildingId) {
-    return (
-      <p className="text-gray-500">
-        لطفا ابتدا یک ساختمان را از تب «ساختمان‌ها» انتخاب کنید.
-      </p>
-    );
-  }
+    return <p className="text-gray-500">لطفا ابتدا یک ساختمان را از تب «ساختمان‌ها» انتخاب کنید.</p>;
+   }
 
+  if (buildingInfo && buildingInfo.hasBlocks === false) {
+    return <p className="text-red-500">برای این ساختمان قابلیت تعریف بلوک فعال نیست.</p>;
+  }
+  
   return (
     <div className="space-y-6 p-4">
       <div className="flex justify-between items-center">
@@ -163,6 +207,10 @@ export default function BlocksTab() {
         <button
           onClick={() => {
             resetForm();
+            if (buildingInfo?.blocksCount != null && blocks.length >= buildingInfo.blocksCount) {
+              alert(`تعداد مجاز بلوک (${buildingInfo.blocksCount}) برای این ساختمان تکمیل شده است.`);
+              return;
+            }
             setFormOpen(true);
           }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
@@ -292,6 +340,12 @@ export default function BlocksTab() {
                     {errors.name}
                   </p>
                 )}
+      {errors.limit && (
+        <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+          <ExclamationCircleIcon className="w-4 h-4" />
+          {errors.limit}
+        </p>
+      )}
               </div>
 
               {/* Floors Count */}

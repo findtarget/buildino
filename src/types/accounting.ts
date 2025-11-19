@@ -7,27 +7,133 @@ export enum TransactionType {
 
 export enum TransactionStatus {
   Pending = 'Pending',
-  Approved = 'Approved', 
+  Approved = 'Approved',
   Posted = 'Posted',
   Cancelled = 'Cancelled'
 }
 
 export enum AccountType {
-  Asset = 'Asset',
-  Liability = 'Liability',
-  Equity = 'Equity',
-  Revenue = 'Revenue',
-  Expense = 'Expense'
+  Asset = 'ASSET',
+  Liability = 'LIABILITY', 
+  Equity = 'EQUITY',
+  Revenue = 'REVENUE',
+  Expense = 'EXPENSE'
 }
 
-export interface ChartOfAccount {
+// Base interface
+export interface BaseAccount {
+  id: string;
   code: string;
   title: string;
+  titleEn?: string;
   type: AccountType;
-  parent?: string;
+  parentId?: string;
   level: number;
   isActive: boolean;
   description?: string;
+  buildingId: number;
+}
+
+// Database Account with relations
+export interface Account extends BaseAccount {
+  createdAt: Date;
+  updatedAt: Date;
+  parent?: Account;
+  children?: Account[];
+  _count: {
+    children: number;
+    journalLines: number;
+    transactions: number;
+  };
+}
+
+export enum JournalEntryStatus {
+  Draft = 'Draft',
+  Posted = 'Posted',
+  Cancelled = 'Cancelled'
+}
+
+
+export enum JournalStatus {
+  Draft = 'Draft',
+  Posted = 'Posted',
+  Reversed = 'Reversed'
+}
+
+// اینترفیس‌ها
+export interface Account {
+  id: string;
+  code: string;
+  title: string;
+  titleEn?: string;
+  type: AccountType;
+  parentId?: string;
+  level: number;
+  isActive: boolean;
+  description?: string;
+  buildingId: number;
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Relations
+  parent?: Account;
+  children?: Account[];
+  _count: {
+    children: number;
+    journalLines: number;
+    transactions: number;
+  };
+}
+
+export interface JournalEntry {
+  id: string;
+  date: Date;
+  reference: string;
+  description: string;
+  totalDebit: number;
+  totalCredit: number;
+  status: JournalEntryStatus;
+  createdBy: string;
+  approvedBy?: string;
+  buildingId: number;
+  lines: JournalEntryLine[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface JournalEntryLine {
+  id: string;
+  journalEntryId: string;
+  accountId: string;
+  account?: ChartOfAccount;
+  description: string;
+  debit: number;
+  credit: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ChartOfAccount {
+  id: string;
+  code: string;
+  title: string;
+  titleEn?: string;
+  type: AccountType;
+  parentId?: string;
+  level: number;
+  description?: string;
+  isActive: boolean;
+  buildingId: number;
+  createdAt: Date;
+  updatedAt: Date;
+
+  parent?: ChartOfAccount;
+  children?: ChartOfAccount[];
+  _count: {
+    children: number;
+    journalLines: number;
+    transactions: number;
+  };
 }
 
 export interface EnhancedTransaction {
@@ -85,4 +191,98 @@ export interface MonthlyData {
   income: number;
   expense: number;
   net: number;
+}
+
+export interface TrialBalanceItem {
+  accountId: string;
+  accountCode: string;
+  accountTitle: string;
+  accountType: AccountType;
+  debit: number;
+  credit: number;
+  balance: number;
+  balanceType: 'debit' | 'credit';
+  hasActivity: boolean;
+}
+
+export interface TrialBalance {
+  accounts: TrialBalanceItem[];
+  totals: {
+    totalDebit: number;
+    totalCredit: number;
+    isBalanced: boolean;
+  };
+  period: {
+    from?: string;
+    to?: string;
+  };
+}
+
+export interface TrialBalanceEntry {
+  accountId: string;
+  accountCode: string;
+  accountTitle: string;
+  accountType: AccountType;
+  debitBalance: number;
+  creditBalance: number;
+  netBalance: number;
+}
+
+export interface BalanceSheetData {
+  assets: {
+    current: TrialBalanceEntry[];
+    nonCurrent: TrialBalanceEntry[];
+    total: number;
+  };
+  liabilities: {
+    current: TrialBalanceEntry[];
+    nonCurrent: TrialBalanceEntry[];
+    total: number;
+  };
+  equity: {
+    items: TrialBalanceEntry[];
+    total: number;
+  };
+}
+
+export interface IncomeStatementData {
+  revenue: {
+    items: TrialBalanceEntry[];
+    total: number;
+  };
+  expenses: {
+    items: TrialBalanceEntry[];
+    total: number;
+  };
+  netIncome: number;
+}
+
+export interface Account extends ChartOfAccount {
+  parent?: ChartOfAccount;
+  children?: ChartOfAccount[];
+  _count: {
+    children: number;
+    journalLines: number;
+    transactions: number;
+  };
+}
+
+//export { AccountType } from '@prisma/client';
+
+export interface TrialBalanceAccount {
+  accountId: number;
+  accountCode: string;
+  accountTitle: string;
+  accountType: AccountType;
+  debit: number;
+  credit: number;
+  balance: number;
+  balanceType: 'debit' | 'credit';
+  hasActivity: boolean;
+}
+
+export interface TrialBalanceTotals {
+  totalDebit: number;
+  totalCredit: number;
+  isBalanced: boolean;
 }

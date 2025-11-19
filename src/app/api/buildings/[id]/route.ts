@@ -2,17 +2,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+//export async function GET(_req: Request,  { params }: { params: { id: string } }) {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   try {
     const building = await prisma.building.findUnique({
-      where: { id: Number(params.id) },
+      where: { id: Number((await ctx.params).id) },
       select: {
         id: true,
         name: true,
         type: true,
         usage: true,
         hasBlocks: true,
-        blocksCount: true, // اضافه شد
+        blocksCount: true,
+        floorsCount: true,
         address: true,
         description: true,
         blocks: true
@@ -28,7 +31,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+//export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   try {
     const body = await req.json();
     const {
@@ -43,7 +48,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     } = body;
 
     const building = await prisma.building.update({
-      where: { id: Number(params.id) },
+      where: { id: Number((await ctx.params).id) },
       data: {
         name,
         type,
@@ -63,6 +68,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         usage: true,
         hasBlocks: true,
         blocksCount: true,
+        floorsCount: true,
         address: true,
         description: true,
         blocks: true
@@ -79,9 +85,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+//export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   try {
-    await prisma.building.delete({ where: { id: Number(params.id) } });
+    await prisma.building.delete({ where: { id: Number((await ctx.params).id) } });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Error deleting building:', err);

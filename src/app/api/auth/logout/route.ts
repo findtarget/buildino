@@ -1,5 +1,4 @@
 // src/app/api/auth/logout/route.ts
-
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
@@ -7,12 +6,13 @@ export const dynamic = 'force-dynamic';
 
 export async function POST() {
   try {
-    // پاک کردن کوکی با تنظیم تاریخ انقضا در گذشته
-    cookies().set('refreshToken', '', {
+    const cookieStore = await cookies(); // ✅ await اضافه شد
+
+    cookieStore.set('refreshToken', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      expires: new Date(0), // تاریخ انقضا در گذشته
+      expires: new Date(0),
       path: '/',
     });
 

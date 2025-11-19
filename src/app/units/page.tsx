@@ -6,12 +6,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { Building, Unit } from '@/types/index.d';
 import { PlusIcon } from '@heroicons/react/24/solid';
 import { motion } from 'framer-motion';
+import { toPersianDigits } from '@/lib/utils';
 
 import UnitsTable from '@/components/UnitsTable';
 import UnitFormModal from '@/components/UnitFormModal';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { useAuth } from '@/hooks/useAuth';
-import api from '@/lib/api';
+import { apiHelpers as api } from '@/lib/api';
 
 export default function UnitsPage() {
   const { user, isLoading: isAuthLoading } = useAuth(); // F: گرفتن وضعیت لودینگ از هوک
@@ -78,7 +79,8 @@ export default function UnitsPage() {
       if (editingUnit) {
         await api.put(`/units/${editingUnit.id}`, data);
       } else {
-        await api.post('/units', { ...data, buildingId: user?.buildingId });
+        //await api.post('/units', { ...data, buildingId: user?.buildingId });
+        await api.post(`/buildings/${user?.buildingId}/units`, data);
       }
       fetchUnitsAndBuilding();
     } catch (error) {
@@ -142,7 +144,10 @@ export default function UnitsPage() {
       <UnitsTable 
         units={units}
         onEdit={handleOpenModal} 
-        onDelete={handleOpenDeleteModal}
+        onDelete={(id) => {
+          const unit = units.find(u => u.id === id);
+          if (unit) handleOpenDeleteModal(unit);
+        }}
       />
       
       <UnitFormModal

@@ -114,3 +114,21 @@ export interface ChartConfig {
   width?: number;
   height?: number;
 }
+
+// src/types/reports.ts
+export interface FinancialReport {
+  id: string;
+  type: ReportType;
+  period: ReportPeriod;
+  data: any;
+  generatedAt: string;
+}
+
+export enum ReportType {
+  TrialBalance = 'TrialBalance',         // میزان‌نامه
+  BalanceSheet = 'BalanceSheet',         // ترازنامه
+  IncomeStatement = 'IncomeStatement',   // صورت سود و زیان
+  CashFlow = 'CashFlow',                 // جریان نقدی
+  GeneralLedger = 'GeneralLedger',       // دفتر کل
+  DetailedLedger = 'DetailedLedger'      // دفتر معین
+}

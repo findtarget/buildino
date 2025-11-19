@@ -118,7 +118,7 @@ export default function ChargePreviewTab({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400">
+                    <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 font-vazir">
                       {formatCurrency(calc.totalAmount || 0)}
                     </td>
                     <td className="px-4 py-3 text-center">

@@ -8,6 +8,7 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, BuildingOffice2Icon, Exclam
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { toPersianDigits, toEnglishDigits } from '@/lib/utils';
+import { apiHelpers } from '@/lib/api';
 
 interface Building {
   id: number;
@@ -63,12 +64,14 @@ export default function BuildingsTab() {
   };
 
   const loadBuildings = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch('/api/buildings');
-      const json = await res.json();
-      if (res.ok && json.success) {
-        setBuildings(json.data || []);
+      const response = await apiHelpers.get<Building[]>('/buildings');
+      if (response.success) {
+        setBuildings(response.data || []);
+      } else {
+        console.error('Failed to load buildings:', response.error);
+        // TODO: Show an error message to the user
       }
     } catch (err) {
       console.error('Error fetching buildings:', err);
@@ -119,13 +122,15 @@ export default function BuildingsTab() {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(`/api/buildings/${deleteTarget.id}`, { method: 'DELETE' });
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const response = await apiHelpers.delete(`/buildings/${deleteTarget.id}`);
+      if (response.success) {
         loadBuildings();
         if (buildingId === deleteTarget.id) setBuildingId(0);
+      } else {
+        console.error('Failed to delete building:', response.error);
+        // TODO: Show an error message to the user
       }
     } catch (err) {
       console.error('Error deleting building:', err);
@@ -147,27 +152,33 @@ export default function BuildingsTab() {
       ...formData,
       blocksCount: formData.hasBlocks
         ? Number(toEnglishDigits(formData.blocksCount))
-        : null
+        : undefined, // Use undefined instead of null for cleaner payloads
     };
-    const method = editing ? 'PUT' : 'POST';
-    const url = editing ? `/api/buildings/${editing.id}` : '/api/buildings';
+
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const response = editing
+        ? await apiHelpers.put<Building>(`/buildings/${editing.id}`, payload)
+        : await apiHelpers.post<Building>('/buildings', payload);
+
+      if (response.success) {
         setFormOpen(false);
         resetForm();
-        loadBuildings();
+        
+        // انتخاب خودکار ساختمان ذخیره شده یا ویرایش شده
+        const activeId = editing ? editing.id : response.data?.id;
+        
+        // Reload buildings and then set the active one
+        await loadBuildings(); 
+        if (activeId) {
+          setBuildingId(activeId);
+        }
       } else {
-        alert(json.error || 'خطا در ذخیره ساختمان');
+        alert(response.error || 'خطا در ذخیره ساختمان');
       }
     } catch (err) {
       console.error('Error saving building:', err);
+      alert('یک خطای پیش‌بینی نشده رخ داد.');
     } finally {
       setLoading(false);
     }

@@ -153,7 +153,10 @@ export function parseJalaliDate(dateString: string): Date {
 }
 
 // فرمت کردن پول
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    return `${toPersianDigits('0')} تومان`;
+  }
   const formatted = new Intl.NumberFormat('fa-IR').format(amount);
   return `${toPersianDigits(formatted)} تومان`;
 }

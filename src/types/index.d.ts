@@ -1,48 +1,97 @@
 // src/types/index.d.ts
 
-export type UnitStatus = 'OwnerOccupied' | 'TenantOccupied' | 'Vacant';
-export type UnitType = 'Residential' | 'Commercial';
-
-export interface Unit {
-  id: number;
-  unitNumber: string;
-  floor: number;
-  area: number;
-  type: UnitType;
-  ownerName: string;
-  ownerContact: string;
-  ownerNationalId: string | null; // F: [جدید] کد ملی مالک
-  status: UnitStatus;
-  residentName: string;
-  residentContact: string;
-  residentNationalId: string | null; // F: [جدید] کد ملی ساکن
-  residentCount: number; // F: [اصلاح] این فیلد از قبل بود و حفظ شده
-  parkingSpots: number;
-  hasStorage: boolean;
-  balance: number;
-  ownerSince: string | null;
-  residentSince: string | null;
-  parkingCount?: number;
-}
-
-// F: [جدید] تعریف انواع داده برای ماژول حسابداری
+// =======================
+// Enums based on Prisma
+// =======================
+export type BuildingType = 'APARTMENT' | 'COMMERCIAL' | 'MIXED_USE' | 'RESIDENTIAL_COMPLEX';
+export type UsageType = 'RESIDENTIAL' | 'COMMERCIAL' | 'MIXED';
 
 export type TransactionType = 'Income' | 'Expense';
 
-export type TransactionCategory = 
-  // Expense Categories
+// =======================
+// Database-synced Models
+// =======================
+
+// ---- Building ----
+export interface Building {
+  id: number;
+  name: string;
+  address?: string | null;
+  totalUnits?: number | null;
+  managerName?: string | null;
+  managerPhone?: string | null;
+  type?: BuildingType | null;
+  usage?: UsageType | null;
+  hasBlocks?: boolean | null;
+  blocksCount?: number | null;
+  floorsCount?: number | null;
+  description?: string | null;
+  createdAt?: string | null; // ISO date
+  updatedAt?: string | null; // ISO date
+}
+
+// ---- Unit ----
+export interface Unit {
+  id: number;
+  buildingId: number;
+  blockId?: number | null;
+  unitNumber: string;
+  floorNumber?: number | null;
+  area: string; // Decimal from DB as string
+  parkingCount: number;
+  hasStorage: boolean;
+  balance: number;
+  type: 'Residential' | 'Commercial' | 'Official';
+  status: 'Vacant' | 'OwnerOccupied' | 'TenantOccupied';
+  
+  // Owner Info
+  ownerName: string;
+  ownerContact: string;
+  ownerSince?: string | null; // ISO date
+  
+  // Resident Info
+  residentName: string;
+  residentContact: string;
+  residentSince?: string | null; // ISO date
+
+  description?: string | null;
+  createdAt?: string | null;    // ISO date
+  updatedAt?: string | null;    // ISO date
+}
+
+// ---- User ----
+export interface User {
+  id: number;
+  buildingId: number;
+  username: string;
+  password?: string;           // Usually not sent to client
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: 'admin' | 'manager' | 'accountant';
+  isActive?: boolean | null;
+  lastLogin?: string | null;   // ISO date
+  createdAt?: string | null;   // ISO date
+}
+
+// ---- Transaction ----
+export type TransactionCategory =
+  // Expense
   'Maintenance' | 'Utilities' | 'StaffSalary' | 'Repairs' | 'Supplies' | 'Management' |
-  // Income Categories
+  // Income
   'MonthlyCharge' | 'MiscellaneousIncome' | 'LateFee';
 
 export interface Transaction {
   id: number;
-  date: string; // "YYYY/MM/DD"
+  buildingId: number;
+  unitId?: number | null;
   title: string;
+  amount: string;               // Decimal from DB as string
   type: TransactionType;
   category: TransactionCategory;
-  amount: number;
-  description?: string;
-  relatedUnitId?: number; // Optional: Links transaction to a specific unit
-  isCharge: boolean; // True if it's a charge (debit), false if it's a payment (credit) for a unit
+  transactionDate: string;      // "YYYY-MM-DD"
+  description?: string | null;
+  isCharge?: boolean | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }

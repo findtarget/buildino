@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,25 +10,31 @@ datasource db {
 }
 
 model Building {
-  id             Int             @id @default(autoincrement())
-  name           String          @db.VarChar(255)
-  address        String?         @db.Text
-  totalUnits     Int?            @default(0) @map("total_units")
-  managerName    String?         @map("manager_name") @db.VarChar(255)
-  managerPhone   String?         @map("manager_phone") @db.VarChar(20)
-  type           BuildingType?
-  usage          UsageType?
-  hasBlocks      Boolean?        @default(false)
-  blocksCount    Int?            @default(0) @map("blocks_count")
-  description    String?         @db.Text
-  createdAt      DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt      DateTime?       @updatedAt @map("updated_at") @db.Timestamp(0)
+  id           Int           @id @default(autoincrement())
+  name         String        @db.VarChar(255)
+  address      String?       @db.Text
+  totalUnits   Int?          @default(0) @map("total_units")
+  managerName  String?       @map("manager_name") @db.VarChar(255)
+  managerPhone String?       @map("manager_phone") @db.VarChar(20)
+  type         BuildingType?
+  usage        UsageType?
+  hasBlocks    Boolean?      @default(false)
+  blocksCount  Int?          @default(0) @map("blocks_count")
+  floorsCount  Int?          @default(0) @map("floors_count")
+  description  String?       @db.Text
+  createdAt    DateTime?     @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime?     @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
   blocks         BuildingBlock[]
   chargeSettings ChargeSettings?
   reports        Report[]
   transactions   Transaction[]
   units          Unit[]
   users          User[]
+  accounts       Account[]
+  journalEntries JournalEntry[] // اضافه شده
+  MonthlyCharge  MonthlyCharge[]
 
   @@map("buildings")
 }
@@ -65,31 +73,11 @@ model Unit {
   transactions  Transaction[]
   block         BuildingBlock? @relation(fields: [blockId], references: [id])
   building      Building       @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "units_ibfk_1")
+  ChargeDetail  ChargeDetail[]
 
   @@unique([buildingId, unitNumber], map: "unique_unit_building")
   @@index([blockId], map: "units_block_id_fkey")
   @@map("units")
-}
-
-model Transaction {
-  id              Int             @id @default(autoincrement())
-  buildingId      Int             @map("building_id")
-  unitId          Int?            @map("unit_id")
-  title           String          @db.VarChar(255)
-  amount          Decimal         @db.Decimal(15, 0)
-  type            TransactionType
-  category        String          @db.VarChar(100)
-  transactionDate DateTime        @map("transaction_date") @db.Date
-  description     String?         @db.Text
-  isCharge        Boolean?        @default(false) @map("is_charge")
-  createdAt       DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt       DateTime?       @updatedAt @map("updated_at") @db.Timestamp(0)
-  building        Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "transactions_ibfk_1")
-  unit            Unit?           @relation(fields: [unitId], references: [id], onUpdate: NoAction, map: "transactions_ibfk_2")
-
-  @@index([buildingId], map: "transactions_ibfk_1")
-  @@index([unitId], map: "transactions_ibfk_2")
-  @@map("transactions")
 }
 
 model ChargeSettings {
@@ -127,7 +115,7 @@ model User {
   id           Int       @id @default(autoincrement())
   buildingId   Int       @map("building_id")
   username     String    @unique @db.VarChar(100)
-  password     String    @map("password_hash") @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
   fullName     String?   @map("full_name") @db.VarChar(255)
   email        String?   @unique @db.VarChar(255)
   phone        String?   @unique @db.VarChar(20)
@@ -136,11 +124,144 @@ model User {
   lastLogin    DateTime? @map("last_login") @db.Timestamp(0)
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
   refreshToken String?   @db.Text
-  reports      Report[]
-  building     Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "users_ibfk_1")
+
+  // Relations
+  reports          Report[]
+  building         Building       @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "users_ibfk_1")
+  createdJournals  JournalEntry[] @relation("JournalCreatedBy") // اضافه شده
+  approvedJournals JournalEntry[] @relation("JournalApprovedBy") // اضافه شده
 
   @@index([buildingId], map: "users_ibfk_1")
   @@map("users")
+}
+
+model Transaction {
+  id              Int             @id @default(autoincrement())
+  buildingId      Int             @map("building_id")
+  unitId          Int?            @map("unit_id")
+  title           String          @db.VarChar(255)
+  amount          Decimal         @db.Decimal(15, 2)
+  type            TransactionType
+  category        String          @db.VarChar(100)
+  transactionDate DateTime        @map("transaction_date") @db.Date
+  description     String?         @db.Text
+  isCharge        Boolean?        @default(false) @map("is_charge")
+  createdAt       DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime?       @updatedAt @map("updated_at") @db.Timestamp(0)
+  building        Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade, map: "transactions_ibfk_1")
+  unit            Unit?           @relation(fields: [unitId], references: [id], onUpdate: NoAction, map: "transactions_ibfk_2")
+  monthlyChargeId Int?            @map("monthly_charge_id")
+  monthlyCharge   MonthlyCharge?  @relation(fields: [monthlyChargeId], references: [id])
+
+  @@index([buildingId], map: "transactions_ibfk_1")
+  @@index([unitId], map: "transactions_ibfk_2")
+  @@map("transactions")
+}
+
+model MonthlyCharge {
+  id          Int      @id @default(autoincrement())
+  buildingId  Int
+  month       Int
+  year        Int
+  totalAmount Decimal  @db.Decimal(15, 2)
+  isFinalized Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  building      Building       @relation(fields: [buildingId], references: [id])
+  chargeDetails ChargeDetail[]
+  transactions  Transaction[]
+
+  @@unique([buildingId, year, month])
+  @@map("monthly_charges")
+}
+
+model ChargeDetail {
+  id              Int     @id @default(autoincrement())
+  monthlyChargeId Int
+  unitId          Int
+  amount          Decimal @db.Decimal(15, 2)
+  description     String?
+
+  monthlyCharge MonthlyCharge @relation(fields: [monthlyChargeId], references: [id])
+  unit          Unit          @relation(fields: [unitId], references: [id])
+
+  @@map("charge_details")
+}
+
+model Account {
+  id          Int         @id @default(autoincrement())
+  buildingId  Int         @map("building_id")
+  accountCode String      @map("account_code") @db.VarChar(20)
+  accountName String      @map("account_name") @db.VarChar(255)
+  parentId    Int?        @map("parent_id")
+  accountType AccountType @map("account_type")
+  balance     Decimal?    @default(0) @db.Decimal(15, 2)
+  isActive    Boolean?    @default(true) @map("is_active")
+  description String?     @db.Text
+  createdAt   DateTime?   @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime?   @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  building     Building      @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  parent       Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountHierarchy")
+  journalLines JournalLine[] @relation("AccountJournalLines")
+
+  @@unique([buildingId, accountCode], map: "unique_account_code_building")
+  @@index([buildingId], map: "accounts_building_id_fkey")
+  @@index([parentId], map: "accounts_parent_id_fkey")
+  @@map("accounts")
+}
+
+model JournalEntry {
+  id           Int       @id @default(autoincrement())
+  buildingId   Int       @map("building_id")
+  entryNumber  String    @map("entry_number") @db.VarChar(50)
+  entryDate    DateTime  @map("entry_date") @db.Date
+  description  String?   @db.Text
+  reference    String?   @db.VarChar(255)
+  totalDebit   Decimal   @default(0) @map("total_debit") @db.Decimal(15, 2)
+  totalCredit  Decimal   @default(0) @map("total_credit") @db.Decimal(15, 2)
+  isPosted     Boolean?  @default(false) @map("is_posted")
+  postedAt     DateTime? @map("posted_at") @db.Timestamp(0)
+  createdById  Int?      @map("created_by_id")
+  approvedById Int?      @map("approved_by_id")
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  building     Building      @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  createdBy    User?         @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  approvedBy   User?         @relation("JournalApprovedBy", fields: [approvedById], references: [id])
+  journalLines JournalLine[] @relation("JournalEntryLines")
+
+  @@unique([buildingId, entryNumber], map: "unique_entry_number_building")
+  @@index([buildingId], map: "journal_entries_building_id_fkey")
+  @@index([createdById], map: "journal_entries_created_by_fkey")
+  @@index([approvedById], map: "journal_entries_approved_by_fkey")
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             Int       @id @default(autoincrement())
+  journalEntryId Int       @map("journal_entry_id")
+  accountId      Int       @map("account_id")
+  debitAmount    Decimal?  @default(0) @map("debit_amount") @db.Decimal(15, 2)
+  creditAmount   Decimal?  @default(0) @map("credit_amount") @db.Decimal(15, 2)
+  description    String?   @db.Text
+  reference      String?   @db.VarChar(255)
+  lineOrder      Int?      @default(1) @map("line_order")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime? @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  journalEntry JournalEntry @relation("JournalEntryLines", fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account      @relation("AccountJournalLines", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([journalEntryId], map: "journal_lines_entry_id_fkey")
+  @@index([accountId], map: "journal_lines_account_id_fkey")
+  @@map("journal_lines")
 }
 
 enum BuildingType {
@@ -165,4 +286,12 @@ enum UserRole {
   admin
   manager
   accountant
+}
+
+enum AccountType {
+  ASSET // دارایی
+  LIABILITY // بدهی
+  EQUITY // حقوق صاحبان سهام
+  INCOME // درآمد
+  EXPENSE // هزینه
 }

@@ -52,7 +52,7 @@ export default function TransactionFormModal({
           ...initialData,
           amount: formatCurrency(initialData.amount).replace(' تومان', ''),
           relatedUnitId: initialData.relatedUnitId ?? undefined,
-          date: initialData.date ? parseJalaliDate(initialData.date) : null,
+          date: initialData.date ? new Date(initialData.date) : null,
         });
       } else {
         setFormData({
